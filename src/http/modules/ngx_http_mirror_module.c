@@ -13,6 +13,7 @@
 typedef struct {
     ngx_array_t  *mirror;
     ngx_flag_t    request_body;
+    ngx_flag_t    response_body;
 } ngx_http_mirror_loc_conf_t;
 
 
@@ -45,6 +46,13 @@ static ngx_command_t  ngx_http_mirror_commands[] = {
       ngx_conf_set_flag_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_mirror_loc_conf_t, request_body),
+      NULL },
+
+    { ngx_string("mirror_response_body"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_mirror_loc_conf_t, response_body),
       NULL },
 
       ngx_null_command
@@ -166,7 +174,9 @@ ngx_http_mirror_handler_internal(ngx_http_request_t *r)
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
 
+        if (!mlcf->response_body) {
         sr->header_only = 1;
+        }
         sr->method = r->method;
         sr->method_name = r->method_name;
     }
@@ -187,6 +197,7 @@ ngx_http_mirror_create_loc_conf(ngx_conf_t *cf)
 
     mlcf->mirror = NGX_CONF_UNSET_PTR;
     mlcf->request_body = NGX_CONF_UNSET;
+    mlcf->response_body = NGX_CONF_UNSET;
 
     return mlcf;
 }
@@ -200,6 +211,7 @@ ngx_http_mirror_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 
     ngx_conf_merge_ptr_value(conf->mirror, prev->mirror, NULL);
     ngx_conf_merge_value(conf->request_body, prev->request_body, 1);
+    ngx_conf_merge_value(conf->response_body, prev->response_body, 0);
 
     return NGX_CONF_OK;
 }
