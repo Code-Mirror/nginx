@@ -18,7 +18,7 @@
 #define NGX_HTTP_IMAGE_RESIZE    3
 #define NGX_HTTP_IMAGE_CROP      4
 #define NGX_HTTP_IMAGE_ROTATE    5
-
+#define NGX_HTTP_IMAGE_WATERMARK 6
 
 #define NGX_HTTP_IMAGE_START     0
 #define NGX_HTTP_IMAGE_READ      1
@@ -49,12 +49,19 @@ typedef struct {
     ngx_flag_t                   transparency;
     ngx_flag_t                   interlace;
 
+    ngx_str_t           watermark;  // watermark file url
+    ngx_str_t           watermark_position; // top-left|top-right|bottom-right|bottom-left
+    ngx_int_t           watermark_width_from; // width from use watermark
+    ngx_int_t           watermark_height_from; // height from use watermark
+
     ngx_http_complex_value_t    *wcv;
     ngx_http_complex_value_t    *hcv;
     ngx_http_complex_value_t    *acv;
     ngx_http_complex_value_t    *jqcv;
     ngx_http_complex_value_t    *wqcv;
     ngx_http_complex_value_t    *shcv;
+    ngx_http_complex_value_t    *wmcv;
+    ngx_http_complex_value_t    *wmpcv;
 
     size_t                       buffer_size;
 } ngx_http_image_filter_conf_t;
@@ -168,6 +175,30 @@ static ngx_command_t  ngx_http_image_filter_commands[] = {
       ngx_conf_set_size_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_image_filter_conf_t, buffer_size),
+      NULL },
+    { ngx_string("image_filter_watermark"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_http_set_complex_value_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_image_filter_conf_t, wmcv),
+      NULL },
+    { ngx_string("image_filter_watermark_position"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_http_set_complex_value_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_image_filter_conf_t, wmpcv),
+      NULL },
+    { ngx_string("image_filter_watermark_height_from"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_image_filter_conf_t, watermark_height_from),
+      NULL },
+    { ngx_string("image_filter_watermark_width_from"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_num_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_image_filter_conf_t, watermark_width_from),
       NULL },
 
       ngx_null_command
@@ -520,6 +551,23 @@ ngx_http_image_read(ngx_http_request_t *r, ngx_chain_t *in)
     return NGX_AGAIN;
 }
 
+static ngx_str_t
+ngx_http_image_filter_get_str_value(ngx_http_request_t *r,
+    ngx_http_complex_value_t *cv, ngx_str_t v)
+{
+    ngx_str_t  val;
+    
+    if (cv == NULL) {
+        return v;
+    }
+
+    if (ngx_http_complex_value(r, cv, &val) != NGX_OK) {
+        return val;
+    }
+
+    return val;
+}
+
 
 static ngx_buf_t *
 ngx_http_image_process(ngx_http_request_t *r)
@@ -547,11 +595,34 @@ ngx_http_image_process(ngx_http_request_t *r)
         if (ctx->angle != 90 && ctx->angle != 180 && ctx->angle != 270) {
             return NULL;
         }
+	    return ngx_http_image_resize(r, ctx);
+	}
+
+	if (conf->wmcv || conf->watermark.data) {
+		ngx_str_t  watermark_value;
+		watermark_value = ngx_http_image_filter_get_str_value(r, conf->wmcv, conf->watermark);
+		conf->watermark.data = ngx_pcalloc(r->pool, watermark_value.len + 1);
+		ngx_cpystrn(conf->watermark.data, watermark_value.data, watermark_value.len+1);
+
+		conf->watermark.len = watermark_value.len;
+
+		ngx_str_t  watermark_position_value;
+		watermark_position_value = ngx_http_image_filter_get_str_value(r, conf->wmpcv, conf->watermark_position);
+		conf->watermark_position.data = ngx_pcalloc(r->pool, watermark_position_value.len + 1);
+		ngx_cpystrn(conf->watermark_position.data, watermark_position_value.data, watermark_position_value.len+1);
+	
+		conf->watermark_position.len = watermark_position_value.len;
+
+		if (conf->filter == NGX_HTTP_IMAGE_WATERMARK) {
+			if (!conf->watermark.data) {
+				return NULL;
+			}
 
         return ngx_http_image_resize(r, ctx);
     }
+	}
+	ctx->max_width = ngx_http_image_filter_get_value(r, conf->wcv, conf->width);
 
-    ctx->max_width = ngx_http_image_filter_get_value(r, conf->wcv, conf->width);
     if (ctx->max_width == 0) {
         return NULL;
     }
@@ -566,7 +637,8 @@ ngx_http_image_process(ngx_http_request_t *r)
         && ctx->width <= ctx->max_width
         && ctx->height <= ctx->max_height
         && ctx->angle == 0
-        && !ctx->force)
+        && !ctx->force
+        && !conf->watermark.data)
     {
         return ngx_http_image_asis(r, ctx);
     }
@@ -581,7 +653,7 @@ ngx_http_image_json(ngx_http_request_t *r, ngx_http_image_filter_ctx_t *ctx)
     size_t      len;
     ngx_buf_t  *b;
 
-    b = ngx_calloc_buf(r->pool);
+    b = ngx_pcalloc(r->pool, sizeof(ngx_buf_t));
     if (b == NULL) {
         return NULL;
     }
@@ -633,7 +705,7 @@ ngx_http_image_asis(ngx_http_request_t *r, ngx_http_image_filter_ctx_t *ctx)
 {
     ngx_buf_t  *b;
 
-    b = ngx_calloc_buf(r->pool);
+    b = ngx_pcalloc(r->pool, sizeof(ngx_buf_t));
     if (b == NULL) {
         return NULL;
     }
@@ -843,7 +915,8 @@ ngx_http_image_resize(ngx_http_request_t *r, ngx_http_image_filter_ctx_t *ctx)
     if (!ctx->force
         && ctx->angle == 0
         && (ngx_uint_t) sx <= ctx->max_width
-        && (ngx_uint_t) sy <= ctx->max_height)
+        && (ngx_uint_t) sy <= ctx->max_height
+        && !conf->watermark.data)
     {
         gdImageDestroy(src);
         return ngx_http_image_asis(r, ctx);
@@ -897,6 +970,8 @@ transparent:
 
         resize = 0;
 
+    } else if (conf->filter == NGX_HTTP_IMAGE_WATERMARK) {
+        resize = 0;
     } else { /* NGX_HTTP_IMAGE_CROP */
 
         resize = 0;
@@ -1042,6 +1117,106 @@ transparent:
         gdImageColorTransparent(dst, gdImageColorExact(dst, red, green, blue));
     }
 
+    if (conf->watermark.data) {
+            int min_w, min_h;
+
+            min_w=dx;
+            min_h=dy;
+
+            if (!min_w || min_w < 0) {
+                min_w=ctx->max_width;
+            }
+
+            if (!min_h || min_h < 0) {
+                min_h=ctx->max_height;
+            }
+
+            if ( min_w >= conf->watermark_width_from &&
+                  min_h >= conf->watermark_height_from){
+
+                FILE *watermark_file = fopen((const char *)conf->watermark.data, "r");
+
+                if (watermark_file) {
+                    gdImagePtr watermark, watermark_mix, white, white_mix;
+                    ngx_int_t wdx = 0, wdy = 0;
+
+                    watermark = gdImageCreateFromPng(watermark_file);
+
+                    if(watermark != NULL) {
+                        if (ngx_strcmp(conf->watermark_position.data, "bottom-right") == 0) {
+                            wdx = (int)dst->sx - watermark->sx - 10;
+                            wdy = (int)dst->sy - watermark->sy - 10;
+                        } else if (ngx_strcmp(conf->watermark_position.data, "top-left") == 0) {
+                            wdx = wdy = 10;
+                        } else if (ngx_strcmp(conf->watermark_position.data, "top-right") == 0) {
+                            wdx = (int)dst->sx - watermark->sx - 10;
+                            wdy = 10;
+                        } else if (ngx_strcmp(conf->watermark_position.data, "bottom-left") == 0) {
+                            wdx = 10;
+                            wdy = (int)dst->sy - watermark->sy - 10;
+                        }else if (ngx_strcmp(conf->watermark_position.data, "top-center") == 0) {
+                            wdy = 10;
+                            wdx = (int)dst->sx/2 - (int)watermark->sx/2;
+                        }else if (ngx_strcmp(conf->watermark_position.data, "bottom-center") == 0) {
+                            wdx = (int)dst->sx/2 - (int)watermark->sx/2;
+                            wdy = (int)dst->sy - watermark->sy - 10;
+                        }else if (ngx_strcmp(conf->watermark_position.data, "left-center") == 0) {
+                            wdx = 10;
+                            wdy = (int)dst->sy/2 - (int)watermark->sy/2;
+                        }else if (ngx_strcmp(conf->watermark_position.data, "right-center") == 0) {
+                            wdx = (int)dst->sx - watermark->sx - 10;
+                            wdy = (int)dst->sy/2 - (int)watermark->sy/2;
+                        }else if (ngx_strcmp(conf->watermark_position.data, "center-center") == 0) {
+                            wdx = (int)dst->sx/2 - (int)watermark->sx/2;
+                            wdy = (int)dst->sy/2 - (int)watermark->sy/2;
+                        }else if (ngx_strcmp(conf->watermark_position.data, "center-random") == 0) {
+                            ngx_int_t randomBit = rand() & 1;
+                            if (randomBit) {
+                                wdx = ((int)dst->sx/2 - (int)watermark->sx/2) - (int)((double)rand() / ((double)RAND_MAX + 1) * 15);
+                                wdy = ((int)dst->sy/2 - (int)watermark->sy/2) + (int)((double)rand() / ((double)RAND_MAX + 1) * 15);
+                            } else {
+                                wdx = ((int)dst->sx/2 - (int)watermark->sx/2) + (int)((double)rand() / ((double)RAND_MAX + 1) * 15);
+                                wdy = ((int)dst->sy/2 - (int)watermark->sy/2) - (int)((double)rand() / ((double)RAND_MAX + 1) * 15);
+                            }
+                        }
+                        watermark_mix = gdImageCreateTrueColor(watermark->sx, watermark->sy);
+                        // WorkAround on transparent source, fill background to white
+                        if (ctx->type == NGX_HTTP_IMAGE_GIF || ctx->type == NGX_HTTP_IMAGE_PNG) {
+                       		white = gdImageCreateTrueColor(dst->sx, dst->sy);
+                        	white_mix = gdImageCreateTrueColor(dst->sx, dst->sy);
+				gdImageFill(white,0,0,gdImageColorAllocate(white,255,255,255));
+                        	gdImageCopy(white_mix, white, 0, 0, 0, 0, white_mix->sx, white_mix->sy);
+                        	gdImageCopy(white_mix, dst, 0, 0, 0, 0, white_mix->sx, white_mix->sy);
+				gdImageCopyMerge(white, white_mix, 0, 0, 0, 0, white->sx, white->sy, 100);
+                        	gdImageDestroy(dst);
+                        	gdImageDestroy(white_mix);
+                        	dst=white;
+			}
+                        gdImageCopy(watermark_mix, dst, 0, 0, wdx, wdy, watermark->sx, watermark->sy);
+                        gdImageCopy(watermark_mix, watermark, 0, 0, 0, 0, watermark->sx, watermark->sy);
+                        gdImageCopyMerge(dst, watermark_mix, wdx, wdy, 0, 0, watermark->sx, watermark->sy, 75);
+                        gdImageDestroy(watermark_mix);
+
+                    } else {
+                        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "watermark file '%s' is not PNG", conf->watermark.data);
+                    }
+
+                    gdImageDestroy(watermark);
+                } else {
+                    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "watermark file '%s' not found", conf->watermark.data);
+                }
+
+                fclose(watermark_file);
+            }else{
+                if (conf->filter == NGX_HTTP_IMAGE_WATERMARK)
+                {
+                    gdImageDestroy(src);
+                    return ngx_http_image_asis(r, ctx);
+                }
+            }
+        }
+
+
     sharpen = ngx_http_image_filter_get_value(r, conf->shcv, conf->sharpen);
     if (sharpen > 0) {
         gdImageSharpen(dst, sharpen);
@@ -1067,7 +1242,7 @@ transparent:
         return NULL;
     }
 
-    b = ngx_calloc_buf(r->pool);
+    b = ngx_pcalloc(r->pool, sizeof(ngx_buf_t));
     if (b == NULL) {
         gdFree(out);
         return NULL;
@@ -1303,6 +1478,9 @@ ngx_http_image_filter_create_conf(ngx_conf_t *cf)
     conf->interlace = NGX_CONF_UNSET;
     conf->buffer_size = NGX_CONF_UNSET_SIZE;
 
+    conf->watermark_width_from = NGX_CONF_UNSET_UINT;
+    conf->watermark_height_from = NGX_CONF_UNSET_UINT;
+
     return conf;
 }
 
@@ -1364,6 +1542,12 @@ ngx_http_image_filter_merge_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_size_value(conf->buffer_size, prev->buffer_size,
                               1 * 1024 * 1024);
 
+    ngx_conf_merge_str_value(conf->watermark, prev->watermark, NULL);
+    ngx_conf_merge_str_value(conf->watermark_position, prev->watermark_position, "bottom-right");
+    
+    ngx_conf_merge_value(conf->watermark_height_from, prev->watermark_height_from, 0);
+    ngx_conf_merge_value(conf->watermark_width_from, prev->watermark_height_from, 0);
+
     return NGX_CONF_OK;
 }
 
@@ -1393,6 +1577,8 @@ ngx_http_image_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         } else if (ngx_strcmp(value[i].data, "size") == 0) {
             imcf->filter = NGX_HTTP_IMAGE_SIZE;
 
+        } else if (ngx_strcmp(value[i].data, "watermark") == 0) {
+            imcf->filter = NGX_HTTP_IMAGE_WATERMARK;
         } else {
             goto failed;
         }
@@ -1449,7 +1635,8 @@ ngx_http_image_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     } else if (ngx_strcmp(value[i].data, "crop") == 0) {
         imcf->filter = NGX_HTTP_IMAGE_CROP;
-
+    } else if (ngx_strcmp(value[i].data, "watermark") == 0) {
+        imcf->filter = NGX_HTTP_IMAGE_WATERMARK;
     } else {
         goto failed;
     }
