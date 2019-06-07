@@ -377,6 +377,13 @@ static ngx_command_t  ngx_http_core_commands[] = {
       offsetof(ngx_http_core_loc_conf_t, client_body_in_file_only),
       &ngx_http_core_request_body_in_file },
 
+    { ngx_string("subrequest_access_phase"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_core_loc_conf_t, subrequest_access_phase),
+      NULL },
+
     { ngx_string("client_body_in_single_buffer"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG,
       ngx_conf_set_flag_slot,
@@ -1070,9 +1077,9 @@ ngx_int_t
 ngx_http_core_access_phase(ngx_http_request_t *r, ngx_http_phase_handler_t *ph)
 {
     ngx_int_t                  rc;
-    ngx_http_core_loc_conf_t  *clcf;
+    ngx_http_core_loc_conf_t  *clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
 
-    if (r != r->main) {
+    if ((r != r->main) && !clcf->subrequest_access_phase) {
         r->phase_handler = ph->next;
         return NGX_AGAIN;
     }
@@ -1090,8 +1097,6 @@ ngx_http_core_access_phase(ngx_http_request_t *r, ngx_http_phase_handler_t *ph)
     if (rc == NGX_AGAIN || rc == NGX_DONE) {
         return NGX_OK;
     }
-
-    clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
 
     if (clcf->satisfy == NGX_HTTP_SATISFY_ALL) {
 
@@ -3396,6 +3401,7 @@ ngx_http_core_create_loc_conf(ngx_conf_t *cf)
     clcf->if_modified_since = NGX_CONF_UNSET_UINT;
     clcf->max_ranges = NGX_CONF_UNSET_UINT;
     clcf->client_body_in_file_only = NGX_CONF_UNSET_UINT;
+    clcf->subrequest_access_phase = NGX_CONF_UNSET;
     clcf->client_body_in_single_buffer = NGX_CONF_UNSET;
     clcf->internal = NGX_CONF_UNSET;
     clcf->sendfile = NGX_CONF_UNSET;
@@ -3615,6 +3621,8 @@ ngx_http_core_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_uint_value(conf->client_body_in_file_only,
                               prev->client_body_in_file_only,
                               NGX_HTTP_REQUEST_BODY_FILE_OFF);
+    ngx_conf_merge_value(conf->subrequest_access_phase,
+                              prev->subrequest_access_phase, 0);
     ngx_conf_merge_value(conf->client_body_in_single_buffer,
                               prev->client_body_in_single_buffer, 0);
     ngx_conf_merge_value(conf->internal, prev->internal, 0);

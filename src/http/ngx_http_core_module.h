@@ -376,6 +376,7 @@ struct ngx_http_core_loc_conf_s {
     ngx_uint_t    max_ranges;              /* max_ranges */
     ngx_uint_t    client_body_in_file_only; /* client_body_in_file_only */
 
+    ngx_flag_t    subrequest_access_phase; /* subrequest_access_phase */
     ngx_flag_t    client_body_in_single_buffer;
                                            /* client_body_in_singe_buffer */
     ngx_flag_t    internal;                /* internal */
