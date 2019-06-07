@@ -3593,7 +3593,10 @@ ngx_http_core_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
         }
     }
 
-    if (conf->error_pages == NULL && prev->error_pages) {
+    ngx_conf_merge_value(conf->subrequest_access_phase,
+                              prev->subrequest_access_phase, 0);
+
+    if (!conf->subrequest_access_phase && conf->error_pages == NULL && prev->error_pages) {
         conf->error_pages = prev->error_pages;
     }
 
@@ -3621,8 +3624,6 @@ ngx_http_core_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_uint_value(conf->client_body_in_file_only,
                               prev->client_body_in_file_only,
                               NGX_HTTP_REQUEST_BODY_FILE_OFF);
-    ngx_conf_merge_value(conf->subrequest_access_phase,
-                              prev->subrequest_access_phase, 0);
     ngx_conf_merge_value(conf->client_body_in_single_buffer,
                               prev->client_body_in_single_buffer, 0);
     ngx_conf_merge_value(conf->internal, prev->internal, 0);
