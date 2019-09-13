@@ -150,7 +150,6 @@ ngx_http_compile_complex_value(ngx_http_compile_complex_value_t *ccv)
 
     for (i = 0; i < v->len; i++) {
         if (v->data[i] == '$') {
-            if (i > 0 && v->data[i - 1] == '$') continue;
             if (v->data[i + 1] >= '1' && v->data[i + 1] <= '9') {
                 nc++;
 
@@ -411,7 +410,6 @@ ngx_http_script_variables_count(ngx_str_t *value)
 
     for (n = 0, i = 0; i < value->len; i++) {
         if (value->data[i] == '$') {
-            if (i > 0 && value->data[i - 1] == '$') continue;
             n++;
         }
     }
@@ -435,9 +433,6 @@ ngx_http_script_compile(ngx_http_script_compile_t *sc)
 
         name.len = 0;
 
-        if (sc->source->data[i] == '$' && i + 1 < sc->source->len && sc->source->data[i + 1] == '$') {
-            i++;
-        } else
         if (sc->source->data[i] == '$') {
 
             if (++i == sc->source->len) {
@@ -543,7 +538,6 @@ ngx_http_script_compile(ngx_http_script_compile_t *sc)
         while (i < sc->source->len) {
 
             if (sc->source->data[i] == '$') {
-                if (i > 0 && sc->source->data[i - 1] == '$') ; else
                 break;
             }
 
