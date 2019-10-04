@@ -186,7 +186,7 @@ ngx_http_auth_request_handler(ngx_http_request_t *r)
     ps->handler = ngx_http_auth_request_done;
     ps->data = ctx;
 
-    if (ngx_http_subrequest(r, &arcf->uri, NULL, &sr, ps,
+    if (ngx_http_subrequest(r, &arcf->uri, &r->args, &sr, ps,
                             NGX_HTTP_SUBREQUEST_WAITED)
         != NGX_OK)
     {
