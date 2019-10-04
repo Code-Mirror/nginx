@@ -130,6 +130,7 @@ static ngx_str_t  ngx_http_charset_default_types[] = {
     ngx_string("text/vnd.wap.wml"),
     ngx_string("application/javascript"),
     ngx_string("application/rss+xml"),
+    ngx_string("application/json"),
     ngx_null_string
 };
 
