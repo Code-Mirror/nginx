@@ -49,7 +49,12 @@ typedef struct {
     ngx_http_complex_value_t  *expires_value;
     ngx_array_t               *headers;
     ngx_array_t               *trailers;
+    ngx_array_t               *input_headers;
 } ngx_http_headers_conf_t;
+
+typedef struct {
+    ngx_int_t                  requires_handler;
+} ngx_http_headers_main_conf_t;
 
 
 static ngx_int_t ngx_http_set_expires(ngx_http_request_t *r,
@@ -58,7 +63,11 @@ static ngx_int_t ngx_http_parse_expires(ngx_str_t *value,
     ngx_http_expires_t *expires, time_t *expires_time, char **err);
 static ngx_int_t ngx_http_add_multi_header_lines(ngx_http_request_t *r,
     ngx_http_header_val_t *hv, ngx_str_t *value);
+static ngx_int_t ngx_http_add_multi_input_header_lines(ngx_http_request_t *r,
+    ngx_http_header_val_t *hv, ngx_str_t *value);
 static ngx_int_t ngx_http_add_header(ngx_http_request_t *r,
+    ngx_http_header_val_t *hv, ngx_str_t *value);
+static ngx_int_t ngx_http_add_input_header(ngx_http_request_t *r,
     ngx_http_header_val_t *hv, ngx_str_t *value);
 static ngx_int_t ngx_http_set_last_modified(ngx_http_request_t *r,
     ngx_http_header_val_t *hv, ngx_str_t *value);
@@ -70,14 +79,31 @@ static ngx_int_t ngx_http_set_content_type_header(ngx_http_request_t *r,
     ngx_http_header_val_t *hv, ngx_str_t *value);
 static ngx_int_t ngx_http_set_response_header(ngx_http_request_t *r,
     ngx_http_header_val_t *hv, ngx_str_t *value);
+static ngx_int_t ngx_http_headers_validate_host(ngx_str_t *host,
+    ngx_pool_t *pool, ngx_uint_t alloc);
+static ngx_int_t ngx_http_set_host_header(ngx_http_request_t *r,
+    ngx_http_header_val_t *hv, ngx_str_t *value);
+static ngx_int_t ngx_http_set_connection_header(ngx_http_request_t *r,
+    ngx_http_header_val_t *hv, ngx_str_t *value);
+static ngx_int_t ngx_http_set_user_agent_header(ngx_http_request_t *r,
+    ngx_http_header_val_t *hv, ngx_str_t *value);
+static ngx_int_t ngx_http_set_content_length_header(ngx_http_request_t *r,
+    ngx_http_header_val_t *hv, ngx_str_t *value);
+static ngx_int_t ngx_http_set_request_header(ngx_http_request_t *r,
+    ngx_http_header_val_t *hv, ngx_str_t *value);
+
+static ngx_int_t ngx_http_headers_handler(ngx_http_request_t *r);
 
 static void *ngx_http_headers_create_conf(ngx_conf_t *cf);
 static char *ngx_http_headers_merge_conf(ngx_conf_t *cf,
     void *parent, void *child);
 static ngx_int_t ngx_http_headers_filter_init(ngx_conf_t *cf);
+static void *ngx_http_headers_filter_main(ngx_conf_t *cf);
 static char *ngx_http_headers_expires(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
 static char *ngx_http_headers_add(ngx_conf_t *cf, ngx_command_t *cmd,
+    void *conf);
+static char *ngx_http_headers_add_input(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
 
 
@@ -147,6 +173,120 @@ static ngx_http_set_header_t  ngx_http_set_headers[] = {
 };
 
 
+static ngx_http_set_header_t  ngx_http_set_input_headers[] = {
+
+    { ngx_string("Host"),
+                 offsetof(ngx_http_headers_in_t, host),
+                 ngx_http_set_host_header },
+
+    { ngx_string("Connection"),
+                 offsetof(ngx_http_headers_in_t, connection),
+                 ngx_http_set_connection_header },
+
+    { ngx_string("If-Modified-Since"),
+                 offsetof(ngx_http_headers_in_t, if_modified_since),
+                 ngx_http_set_request_header },
+
+    { ngx_string("If-Unmodified-Since"),
+                 offsetof(ngx_http_headers_in_t, if_unmodified_since),
+                 ngx_http_set_request_header },
+
+    { ngx_string("If-Match"),
+                 offsetof(ngx_http_headers_in_t, if_match),
+                 ngx_http_set_request_header },
+
+    { ngx_string("If-None-Match"),
+                 offsetof(ngx_http_headers_in_t, if_none_match),
+                 ngx_http_set_request_header },
+
+    { ngx_string("User-Agent"),
+                 offsetof(ngx_http_headers_in_t, user_agent),
+                 ngx_http_set_user_agent_header },
+
+    { ngx_string("Referer"),
+                 offsetof(ngx_http_headers_in_t, referer),
+                 ngx_http_set_request_header },
+
+    { ngx_string("Content-Length"),
+                 offsetof(ngx_http_headers_in_t, content_length),
+                 ngx_http_set_content_length_header },
+
+    { ngx_string("Content-Type"),
+                 offsetof(ngx_http_headers_in_t, content_type),
+                 ngx_http_set_request_header },
+
+    { ngx_string("Range"),
+                 offsetof(ngx_http_headers_in_t, range),
+                 ngx_http_set_request_header },
+
+    { ngx_string("If-Range"),
+                 offsetof(ngx_http_headers_in_t, if_range),
+                 ngx_http_set_request_header },
+
+    { ngx_string("Transfer-Encoding"),
+                 offsetof(ngx_http_headers_in_t, transfer_encoding),
+                 ngx_http_set_request_header },
+
+    { ngx_string("Expect"),
+                 offsetof(ngx_http_headers_in_t, expect),
+                 ngx_http_set_request_header },
+
+    { ngx_string("Upgrade"),
+                 offsetof(ngx_http_headers_in_t, upgrade),
+                 ngx_http_set_request_header },
+
+#if (NGX_HTTP_GZIP)
+    { ngx_string("Accept-Encoding"),
+                 offsetof(ngx_http_headers_in_t, accept_encoding),
+                 ngx_http_set_request_header },
+
+    { ngx_string("Via"), offsetof(ngx_http_headers_in_t, via),
+                 ngx_http_set_request_header },
+#endif
+
+    { ngx_string("Authorization"),
+                 offsetof(ngx_http_headers_in_t, authorization),
+                 ngx_http_set_request_header },
+
+    { ngx_string("Keep-Alive"),
+                 offsetof(ngx_http_headers_in_t, keep_alive),
+                 ngx_http_set_request_header },
+
+#if (NGX_HTTP_X_FORWARDED_FOR)
+    { ngx_string("X-Forwarded-For"),
+                 offsetof(ngx_http_headers_in_t, x_forwarded_for),
+                 ngx_http_add_multi_input_header_lines },
+
+#endif
+
+#if (NGX_HTTP_REALIP)
+    { ngx_string("X-Real-IP"),
+                 offsetof(ngx_http_headers_in_t, x_real_ip),
+                 ngx_http_set_request_header },
+#endif
+
+#if (NGX_HTTP_DAV)
+    { ngx_string("Depth"), offsetof(ngx_http_headers_in_t, depth),
+                 ngx_http_set_request_header },
+
+    { ngx_string("Destination"), offsetof(ngx_http_headers_in_t, destination),
+                 ngx_http_set_request_header },
+
+    { ngx_string("Overwrite"), offsetof(ngx_http_headers_in_t, overwrite),
+                 ngx_http_set_request_header },
+
+    { ngx_string("Date"), offsetof(ngx_http_headers_in_t, date),
+                 ngx_http_set_request_header },
+#endif
+
+    { ngx_string("Cookie"),
+                 offsetof(ngx_http_headers_in_t, cookies),
+                 ngx_http_add_multi_input_header_lines },
+
+    { ngx_null_string, 0, NULL }
+};
+
+
 static ngx_command_t  ngx_http_headers_filter_commands[] = {
 
     { ngx_string("expires"),
@@ -165,6 +305,14 @@ static ngx_command_t  ngx_http_headers_filter_commands[] = {
       offsetof(ngx_http_headers_conf_t, headers),
       NULL },
 
+    { ngx_string("add_input_header"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_TAKE2,
+      ngx_http_headers_add_input,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_headers_conf_t, input_headers),
+      NULL },
+
     { ngx_string("add_trailer"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
                         |NGX_CONF_TAKE23,
@@ -181,7 +329,7 @@ static ngx_http_module_t  ngx_http_headers_filter_module_ctx = {
     NULL,                                  /* preconfiguration */
     ngx_http_headers_filter_init,          /* postconfiguration */
 
-    NULL,                                  /* create main configuration */
+    ngx_http_headers_filter_main,          /* create main configuration */
     NULL,                                  /* init main configuration */
 
     NULL,                                  /* create server configuration */
@@ -611,6 +759,27 @@ ngx_http_add_header(ngx_http_request_t *r, ngx_http_header_val_t *hv,
 
 
 static ngx_int_t
+ngx_http_add_input_header(ngx_http_request_t *r, ngx_http_header_val_t *hv,
+    ngx_str_t *value)
+{
+    ngx_table_elt_t  *h;
+
+    if (value->len) {
+        h = ngx_list_push(&r->headers_in.headers);
+        if (h == NULL) {
+            return NGX_ERROR;
+        }
+
+        h->hash = 1;
+        h->key = hv->key;
+        h->value = *value;
+    }
+
+    return NGX_OK;
+}
+
+
+static ngx_int_t
 ngx_http_add_multi_header_lines(ngx_http_request_t *r,
     ngx_http_header_val_t *hv, ngx_str_t *value)
 {
@@ -631,6 +800,46 @@ ngx_http_add_multi_header_lines(ngx_http_request_t *r,
     }
 
     h = ngx_list_push(&r->headers_out.headers);
+    if (h == NULL) {
+        return NGX_ERROR;
+    }
+
+    h->hash = 1;
+    h->key = hv->key;
+    h->value = *value;
+
+    ph = ngx_array_push(pa);
+    if (ph == NULL) {
+        return NGX_ERROR;
+    }
+
+    *ph = h;
+
+    return NGX_OK;
+}
+
+
+static ngx_int_t
+ngx_http_add_multi_input_header_lines(ngx_http_request_t *r,
+    ngx_http_header_val_t *hv, ngx_str_t *value)
+{
+    ngx_array_t      *pa;
+    ngx_table_elt_t  *h, **ph;
+
+    if (value->len == 0) {
+        return NGX_OK;
+    }
+
+    pa = (ngx_array_t *) ((char *) &r->headers_in + hv->offset);
+
+    if (pa->elts == NULL) {
+        if (ngx_array_init(pa, r->pool, 1, sizeof(ngx_table_elt_t *)) != NGX_OK)
+        {
+            return NGX_ERROR;
+        }
+    }
+
+    h = ngx_list_push(&r->headers_in.headers);
     if (h == NULL) {
         return NGX_ERROR;
     }
@@ -803,6 +1012,302 @@ ngx_http_set_response_header(ngx_http_request_t *r, ngx_http_header_val_t *hv,
 }
 
 
+static ngx_int_t ngx_http_set_host_header(ngx_http_request_t *r,
+    ngx_http_header_val_t *hv, ngx_str_t *value)
+{
+    ngx_str_t host;
+
+    if (value->len) {
+        host= *value;
+
+        if (ngx_http_headers_validate_host(&host, r->pool, 0) != NGX_OK) {
+            return NGX_ERROR;
+        }
+
+        r->headers_in.server = host;
+
+    } else {
+        r->headers_in.server = *value;
+    }
+
+    return ngx_http_set_request_header(r, hv, value);
+}
+
+
+static ngx_int_t ngx_http_set_connection_header(ngx_http_request_t *r,
+    ngx_http_header_val_t *hv, ngx_str_t *value)
+{
+    r->headers_in.connection_type = 0;
+
+    if (value->len == 0) {
+        return ngx_http_set_request_header(r, hv, value);
+    }
+
+    if (ngx_strcasestrn(value->data, "close", 5 - 1)) {
+        r->headers_in.connection_type = NGX_HTTP_CONNECTION_CLOSE;
+        r->headers_in.keep_alive_n = -1;
+
+    } else if (ngx_strcasestrn(value->data, "keep-alive", 10 - 1)) {
+        r->headers_in.connection_type = NGX_HTTP_CONNECTION_KEEP_ALIVE;
+    }
+
+    return ngx_http_set_request_header(r, hv, value);
+}
+
+
+static ngx_int_t ngx_http_set_user_agent_header(ngx_http_request_t *r,
+    ngx_http_header_val_t *hv, ngx_str_t *value)
+{
+    u_char  *user_agent, *msie;
+
+    /* clear existing settings */
+
+    r->headers_in.msie = 0;
+    r->headers_in.msie6 = 0;
+    r->headers_in.opera = 0;
+    r->headers_in.gecko = 0;
+    r->headers_in.chrome = 0;
+    r->headers_in.safari = 0;
+    r->headers_in.konqueror = 0;
+
+    if (value->len == 0) {
+        return ngx_http_set_request_header(r, hv, value);
+    }
+
+    /* check some widespread browsers */
+
+    user_agent = value->data;
+
+    msie = ngx_strstrn(user_agent, "MSIE ", 5 - 1);
+
+    if (msie && msie + 7 < user_agent + value->len) {
+
+        r->headers_in.msie = 1;
+
+        if (msie[6] == '.') {
+
+            switch (msie[5]) {
+            case '4':
+            case '5':
+                r->headers_in.msie6 = 1;
+                break;
+            case '6':
+                if (ngx_strstrn(msie + 8, "SV1", 3 - 1) == NULL) {
+                    r->headers_in.msie6 = 1;
+                }
+                break;
+            }
+        }
+    }
+
+    if (ngx_strstrn(user_agent, "Opera", 5 - 1)) {
+        r->headers_in.opera = 1;
+        r->headers_in.msie = 0;
+        r->headers_in.msie6 = 0;
+    }
+
+    if (!r->headers_in.msie && !r->headers_in.opera) {
+
+        if (ngx_strstrn(user_agent, "Gecko/", 6 - 1)) {
+            r->headers_in.gecko = 1;
+
+        } else if (ngx_strstrn(user_agent, "Chrome/", 7 - 1)) {
+            r->headers_in.chrome = 1;
+
+        } else if (ngx_strstrn(user_agent, "Safari/", 7 - 1)
+                   && ngx_strstrn(user_agent, "Mac OS X", 8 - 1))
+        {
+            r->headers_in.safari = 1;
+
+        } else if (ngx_strstrn(user_agent, "Konqueror", 9 - 1)) {
+            r->headers_in.konqueror = 1;
+        }
+    }
+
+    return ngx_http_set_request_header(r, hv, value);
+}
+
+
+static ngx_int_t ngx_http_set_content_length_header(ngx_http_request_t *r,
+    ngx_http_header_val_t *hv, ngx_str_t *value)
+{
+    off_t           len;
+
+    if (value->len == 0) {
+        return ngx_http_set_request_header(r, hv, value);
+    }
+
+    len = ngx_atosz(value->data, value->len);
+    if (len == NGX_ERROR) {
+        return NGX_ERROR;
+    }
+
+    r->headers_in.content_length_n = len;
+
+    return ngx_http_set_request_header(r, hv, value);
+}
+
+
+static ngx_int_t
+ngx_http_headers_validate_host(ngx_str_t *host, ngx_pool_t *pool,
+    ngx_uint_t alloc)
+{
+    u_char  *h, ch;
+    size_t   i, dot_pos, host_len;
+
+    enum {
+        sw_usual = 0,
+        sw_literal,
+        sw_rest
+    } state;
+
+    dot_pos = host->len;
+    host_len = host->len;
+
+    h = host->data;
+
+    state = sw_usual;
+
+    for (i = 0; i < host->len; i++) {
+        ch = h[i];
+
+        switch (ch) {
+
+        case '.':
+            if (dot_pos == i - 1) {
+                return NGX_DECLINED;
+            }
+            dot_pos = i;
+            break;
+
+        case ':':
+            if (state == sw_usual) {
+                host_len = i;
+                state = sw_rest;
+            }
+            break;
+
+        case '[':
+            if (i == 0) {
+                state = sw_literal;
+            }
+            break;
+
+        case ']':
+            if (state == sw_literal) {
+                host_len = i + 1;
+                state = sw_rest;
+            }
+            break;
+
+        case '\0':
+            return NGX_DECLINED;
+
+        default:
+
+            if (ngx_path_separator(ch)) {
+                return NGX_DECLINED;
+            }
+
+            if (ch >= 'A' && ch <= 'Z') {
+                alloc = 1;
+            }
+
+            break;
+        }
+    }
+
+    if (dot_pos == host_len - 1) {
+        host_len--;
+    }
+
+    if (host_len == 0) {
+        return NGX_DECLINED;
+    }
+
+    if (alloc) {
+        host->data = ngx_pnalloc(pool, host_len);
+        if (host->data == NULL) {
+            return NGX_ERROR;
+        }
+
+        ngx_strlow(host->data, h, host_len);
+    }
+
+    host->len = host_len;
+
+    return NGX_OK;
+}
+
+
+static ngx_int_t
+ngx_http_set_request_header(ngx_http_request_t *r, ngx_http_header_val_t *hv,
+    ngx_str_t *value)
+{
+    ngx_table_elt_t  *h, **old;
+
+    old = (ngx_table_elt_t **) ((char *) &r->headers_in + hv->offset);
+
+    if (value->len == 0) {
+        if (*old) {
+            (*old)->hash = 0;
+            *old = NULL;
+        } else {
+            h = ngx_list_push(&r->headers_in.headers);
+            if (h == NULL) {
+                return NGX_ERROR;
+            }
+
+            *old = h;
+            h->hash = 0;
+            h->value = *value;
+        }
+
+        return NGX_OK;
+    }
+
+    if (*old) {
+        h = *old;
+
+    } else {
+        h = ngx_list_push(&r->headers_in.headers);
+        if (h == NULL) {
+            return NGX_ERROR;
+        }
+
+        *old = h;
+    }
+
+    h->hash = 1;
+    h->key = hv->key;
+    h->value = *value;
+
+    return NGX_OK;
+}
+
+
+static ngx_int_t ngx_http_headers_handler(ngx_http_request_t *r) {
+    ngx_http_headers_conf_t *hcf = ngx_http_get_module_loc_conf(r, ngx_http_headers_filter_module);
+
+    if (hcf->input_headers) {
+        ngx_http_header_val_t *h = hcf->input_headers->elts;
+        for (ngx_uint_t i = 0; i < hcf->input_headers->nelts; i++) {
+            ngx_str_t value;
+
+            if (ngx_http_complex_value(r, &h[i].value, &value) != NGX_OK) {
+                return NGX_ERROR;
+            }
+
+            if (h[i].handler(r, &h[i], &value) != NGX_OK) {
+                return NGX_ERROR;
+            }
+        }
+    }
+
+    return NGX_DECLINED;
+}
+
+
 static void *
 ngx_http_headers_create_conf(ngx_conf_t *cf)
 {
@@ -865,7 +1370,34 @@ ngx_http_headers_filter_init(ngx_conf_t *cf)
     ngx_http_next_body_filter = ngx_http_top_body_filter;
     ngx_http_top_body_filter = ngx_http_trailers_filter;
 
+    ngx_http_headers_main_conf_t *hmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_headers_filter_module);
+    if (!hmcf->requires_handler) {
+        return NGX_OK;
+    }
+
+    ngx_http_core_main_conf_t *cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_core_module);
+
+    ngx_http_handler_pt *h = ngx_array_push(&cmcf->phases[NGX_HTTP_REWRITE_PHASE].handlers);
+    if (h == NULL) {
+        return NGX_ERROR;
+    }
+
+    *h = ngx_http_headers_handler;
+
     return NGX_OK;
+}
+
+
+static void *
+ngx_http_headers_filter_main(ngx_conf_t *cf)
+{
+    ngx_http_headers_main_conf_t *hmcf = ngx_pcalloc(cf->pool, sizeof(ngx_http_headers_main_conf_t));
+
+    if (hmcf == NULL) {
+        return NULL;
+    }
+
+    return hmcf;
 }
 
 
@@ -1013,6 +1545,76 @@ ngx_http_headers_add(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     hv->always = 1;
+
+    return NGX_CONF_OK;
+}
+
+
+static char *
+ngx_http_headers_add_input(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ngx_http_headers_conf_t *hcf = conf;
+
+    ngx_str_t                          *value;
+    ngx_uint_t                          i;
+    ngx_array_t                       **headers;
+    ngx_http_header_val_t              *hv;
+    ngx_http_set_header_t              *set;
+    ngx_http_compile_complex_value_t    ccv;
+
+    value = cf->args->elts;
+
+    headers = (ngx_array_t **) ((char *) hcf + cmd->offset);
+
+    if (*headers == NULL) {
+        *headers = ngx_array_create(cf->pool, 1,
+                                    sizeof(ngx_http_header_val_t));
+        if (*headers == NULL) {
+            return NGX_CONF_ERROR;
+        }
+    }
+
+    hv = ngx_array_push(*headers);
+    if (hv == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    hv->key = value[1];
+    hv->handler = NULL;
+    hv->offset = 0;
+    hv->always = 0;
+
+    hv->handler = ngx_http_add_input_header;
+
+    set = ngx_http_set_input_headers;
+    for (i = 0; set[i].name.len; i++) {
+        if (ngx_strcasecmp(value[1].data, set[i].name.data) != 0) {
+            continue;
+        }
+
+        hv->offset = set[i].offset;
+        hv->handler = set[i].handler;
+
+        break;
+    }
+
+    if (value[2].len == 0) {
+        ngx_memzero(&hv->value, sizeof(ngx_http_complex_value_t));
+
+    } else {
+        ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
+        ccv.cf = cf;
+        ccv.value = &value[2];
+        ccv.complex_value = &hv->value;
+
+        if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
+            return NGX_CONF_ERROR;
+        }
+    }
+
+    ngx_http_headers_main_conf_t *hmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_headers_filter_module);
+    hmcf->requires_handler = 1;
 
     return NGX_CONF_OK;
 }
