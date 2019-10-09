@@ -211,6 +211,10 @@ static ngx_http_set_header_t  ngx_http_set_input_headers[] = {
                  offsetof(ngx_http_headers_in_t, content_length),
                  ngx_http_set_content_length_header },
 
+    { ngx_string("Content-Range"),
+                 offsetof(ngx_http_headers_in_t, content_range),
+                 ngx_http_set_request_header },
+
     { ngx_string("Content-Type"),
                  offsetof(ngx_http_headers_in_t, content_type),
                  ngx_http_set_request_header },
@@ -225,6 +229,10 @@ static ngx_http_set_header_t  ngx_http_set_input_headers[] = {
 
     { ngx_string("Transfer-Encoding"),
                  offsetof(ngx_http_headers_in_t, transfer_encoding),
+                 ngx_http_set_request_header },
+
+    { ngx_string("TE"),
+                 offsetof(ngx_http_headers_in_t, te),
                  ngx_http_set_request_header },
 
     { ngx_string("Expect"),
@@ -262,6 +270,15 @@ static ngx_http_set_header_t  ngx_http_set_input_headers[] = {
 #if (NGX_HTTP_REALIP)
     { ngx_string("X-Real-IP"),
                  offsetof(ngx_http_headers_in_t, x_real_ip),
+                 ngx_http_set_request_header },
+#endif
+
+#if (NGX_HTTP_HEADERS)
+    { ngx_string("Accept"), offsetof(ngx_http_headers_in_t, accept),
+                 ngx_http_set_request_header },
+
+    { ngx_string("Accept-Language"),
+                 offsetof(ngx_http_headers_in_t, accept_language),
                  ngx_http_set_request_header },
 #endif
 
