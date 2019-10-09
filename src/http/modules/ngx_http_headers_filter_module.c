@@ -769,6 +769,15 @@ ngx_http_set_response_header(ngx_http_request_t *r, ngx_http_header_val_t *hv,
         if (*old) {
             (*old)->hash = 0;
             *old = NULL;
+        } else {
+            h = ngx_list_push(&r->headers_out.headers);
+            if (h == NULL) {
+                return NGX_ERROR;
+            }
+
+            *old = h;
+            h->hash = 0;
+            h->value = *value;
         }
 
         return NGX_OK;
