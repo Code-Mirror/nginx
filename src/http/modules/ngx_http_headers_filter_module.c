@@ -1362,6 +1362,10 @@ ngx_http_headers_merge_conf(ngx_conf_t *cf, void *parent, void *child)
         }
     }
 
+    if (conf->input_headers == NULL) {
+        conf->input_headers = prev->input_headers;
+    }
+
     if (conf->headers == NULL) {
         conf->headers = prev->headers;
     }
