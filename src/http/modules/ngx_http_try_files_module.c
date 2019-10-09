@@ -40,7 +40,7 @@ static ngx_command_t  ngx_http_try_files_commands[] = {
       0,
       NULL },
     { ngx_string("redirect"),
-      NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_TAKE1,
       ngx_http_try_files,
       NGX_HTTP_LOC_CONF_OFFSET,
       0,
