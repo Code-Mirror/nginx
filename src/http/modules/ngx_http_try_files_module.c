@@ -34,7 +34,7 @@ static ngx_int_t ngx_http_try_files_init(ngx_conf_t *cf);
 static ngx_command_t  ngx_http_try_files_commands[] = {
 
     { ngx_string("try_files"),
-      NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
+      NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_2MORE,
       ngx_http_try_files,
       NGX_HTTP_LOC_CONF_OFFSET,
       0,
