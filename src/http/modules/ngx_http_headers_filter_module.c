@@ -779,18 +779,42 @@ static ngx_int_t
 ngx_http_add_input_header(ngx_http_request_t *r, ngx_http_header_val_t *hv,
     ngx_str_t *value)
 {
-    ngx_table_elt_t  *h;
+    ngx_table_elt_t *h;
 
-    if (value->len) {
-        h = ngx_list_push(&r->headers_in.headers);
-        if (h == NULL) {
-            return NGX_ERROR;
+    if (value->len == 0) {
+        ngx_list_part_t *part = NULL;
+        ngx_uint_t i = 0;
+        for (part = &r->headers_in.headers.part; part; part = part->next) {
+            ngx_table_elt_t *elts = part->elts;
+            for (i = 0; i < part->nelts; i++) {
+                if (hv->key.len == elts[i].key.len && !ngx_strncasecmp(hv->key.data, elts[i].key.data, hv->key.len)) { goto find; }
+            }
+        }
+find:
+        if (part == NULL) {
+            return NGX_OK;
+        }
+        part->nelts--;
+        ngx_table_elt_t *elts = part->elts;
+        for (; i < part->nelts; i++) {
+            for (ngx_uint_t j = 0; ngx_http_set_input_headers[j].name.len; j++) {
+                ngx_table_elt_t **old2 = (ngx_table_elt_t **) ((char *) &r->headers_in + ngx_http_set_input_headers[j].offset);
+                if (*old2 && *old2 == &elts[i + 1]) { *old2 = &elts[i]; break; }
+            }
+            elts[i] = elts[i + 1];
         }
 
-        h->hash = 1;
-        h->key = hv->key;
-        h->value = *value;
+        return NGX_OK;
     }
+
+    h = ngx_list_push(&r->headers_in.headers);
+    if (h == NULL) {
+        return NGX_ERROR;
+    }
+
+    h->hash = 1;
+    h->key = hv->key;
+    h->value = *value;
 
     return NGX_OK;
 }
