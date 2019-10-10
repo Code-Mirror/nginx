@@ -838,10 +838,16 @@ ngx_http_log_iso8601(ngx_http_request_t *r, u_char *buf, ngx_http_log_op_t *op)
 static u_char *
 ngx_http_log_iso8601_msec(ngx_http_request_t *r, u_char *buf, ngx_http_log_op_t *op)
 {
-    ngx_time_t *tp = ngx_timeofday();
     size_t len = ngx_cached_http_log_iso8601.len - 6;
     buf = ngx_cpymem(buf, ngx_cached_http_log_iso8601.data, len);
+#if (NGX_DEBUG)
+    struct timeval tv;
+    ngx_gettimeofday(&tv);
+    buf = ngx_snprintf(buf, 4, ".%03M", tv.tv_usec / 1000);
+#else
+    ngx_time_t *tp = ngx_timeofday();
     buf = ngx_snprintf(buf, 4, ".%03M", tp->msec);
+#endif
     return ngx_cpymem(buf, ngx_cached_http_log_iso8601.data + ngx_cached_http_log_iso8601.len - 6, 6);
 }
 
@@ -855,10 +861,16 @@ ngx_http_log_iso8601_local(ngx_http_request_t *r, u_char *buf, ngx_http_log_op_t
 static u_char *
 ngx_http_log_iso8601_local_msec(ngx_http_request_t *r, u_char *buf, ngx_http_log_op_t *op)
 {
-    ngx_time_t *tp = ngx_timeofday();
     size_t len = ngx_cached_http_log_iso8601.len - 6;
     buf = ngx_cpymem(buf, ngx_cached_http_log_iso8601.data, len);
+#if (NGX_DEBUG)
+    struct timeval tv;
+    ngx_gettimeofday(&tv);
+    return ngx_snprintf(buf, 4, ".%03M", tv.tv_usec / 1000);
+#else
+    ngx_time_t *tp = ngx_timeofday();
     return ngx_snprintf(buf, 4, ".%03M", tp->msec);
+#endif
 }
 
 static u_char *
