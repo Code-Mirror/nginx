@@ -117,6 +117,10 @@ ngx_log_error_core(ngx_uint_t level, ngx_log_t *log, ngx_err_t err,
     p = ngx_cpymem(errstr, ngx_cached_err_log_time.data,
                    ngx_cached_err_log_time.len);
 
+    struct timeval tv;
+    ngx_gettimeofday(&tv);
+    p = ngx_snprintf(p, 4, ".%03M", tv.tv_usec / 1000);
+
     p = ngx_slprintf(p, last, " [%V] ", &err_levels[level]);
 
     /* pid#tid */
