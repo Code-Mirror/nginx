@@ -14,6 +14,11 @@
 #include <ngx_http.h>
 
 
+#define ngx_http_script_exit  (u_char *) &ngx_http_script_exit_code
+ 
+extern uintptr_t ngx_http_script_exit_code;
+
+
 typedef struct {
     u_char                     *ip;
     u_char                     *pos;
