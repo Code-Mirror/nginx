@@ -27,7 +27,9 @@ static size_t ngx_http_script_full_name_len_code(ngx_http_script_engine_t *e);
 static void ngx_http_script_full_name_code(ngx_http_script_engine_t *e);
 
 
-uintptr_t ngx_http_script_exit_code = (uintptr_t) NULL;
+#define ngx_http_script_exit  (u_char *) &ngx_http_script_exit_code
+
+static uintptr_t ngx_http_script_exit_code = (uintptr_t) NULL;
 
 
 void

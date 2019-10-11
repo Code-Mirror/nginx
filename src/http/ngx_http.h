@@ -190,7 +190,4 @@ char *ngx_http_rewrite_value(ngx_conf_t *cf,
 ngx_int_t ngx_http_rewrite_var(ngx_http_request_t *r, ngx_http_variable_value_t *v,
     uintptr_t data);
 
-extern uintptr_t ngx_http_script_exit_code;
-#define ngx_http_script_exit  (u_char *) &ngx_http_script_exit_code
-
 #endif /* _NGX_HTTP_H_INCLUDED_ */
