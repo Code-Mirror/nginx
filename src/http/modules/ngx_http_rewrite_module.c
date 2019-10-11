@@ -10,6 +10,16 @@
 #include <ngx_http.h>
 
 
+typedef struct {
+    ngx_array_t  *codes;        /* uintptr_t */
+
+    ngx_uint_t    stack_size;
+
+    ngx_flag_t    log;
+    ngx_flag_t    uninitialized_variable_warn;
+} ngx_http_rewrite_loc_conf_t;
+
+
 static void *ngx_http_rewrite_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_rewrite_merge_loc_conf(ngx_conf_t *cf,
     void *parent, void *child);
@@ -27,6 +37,8 @@ static char *ngx_http_rewrite_variable(ngx_conf_t *cf,
     ngx_http_rewrite_loc_conf_t *lcf, ngx_str_t *value);
 static char *ngx_http_rewrite_set(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
+static char * ngx_http_rewrite_value(ngx_conf_t *cf,
+    ngx_http_rewrite_loc_conf_t *lcf, ngx_str_t *value);
 
 
 static ngx_command_t  ngx_http_rewrite_commands[] = {
@@ -172,7 +184,7 @@ ngx_http_rewrite_handler(ngx_http_request_t *r)
 }
 
 
-ngx_int_t
+static ngx_int_t
 ngx_http_rewrite_var(ngx_http_request_t *r, ngx_http_variable_value_t *v,
     uintptr_t data)
 {
@@ -944,7 +956,7 @@ ngx_http_rewrite_set(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 }
 
 
-char *
+static char *
 ngx_http_rewrite_value(ngx_conf_t *cf, ngx_http_rewrite_loc_conf_t *lcf,
     ngx_str_t *value)
 {
