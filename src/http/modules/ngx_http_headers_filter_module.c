@@ -392,8 +392,8 @@ ngx_http_headers_filter(ngx_http_request_t *r)
     conf = ngx_http_get_module_loc_conf(r, ngx_http_headers_filter_module);
 
     if (conf->expires == NGX_HTTP_EXPIRES_OFF
-        && conf->headers == NULL
-        && conf->trailers == NULL)
+        && conf->headers == NGX_CONF_UNSET_PTR
+        && conf->trailers == NGX_CONF_UNSET_PTR)
     {
         return ngx_http_next_header_filter(r);
     }
@@ -424,7 +424,7 @@ ngx_http_headers_filter(ngx_http_request_t *r)
         }
     }
 
-    if (conf->headers) {
+    if (conf->headers != NGX_CONF_UNSET_PTR) {
         h = conf->headers->elts;
         for (i = 0; i < conf->headers->nelts; i++) {
 
@@ -442,7 +442,7 @@ ngx_http_headers_filter(ngx_http_request_t *r)
         }
     }
 
-    if (conf->trailers) {
+    if (conf->trailers != NGX_CONF_UNSET_PTR) {
         h = conf->trailers->elts;
         for (i = 0; i < conf->trailers->nelts; i++) {
 
@@ -472,7 +472,7 @@ ngx_http_trailers_filter(ngx_http_request_t *r, ngx_chain_t *in)
     conf = ngx_http_get_module_loc_conf(r, ngx_http_headers_filter_module);
 
     if (in == NULL
-        || conf->trailers == NULL
+        || conf->trailers == NGX_CONF_UNSET_PTR
         || !r->expect_trailers
         || r->header_only)
     {
@@ -769,6 +769,17 @@ ngx_http_add_header(ngx_http_request_t *r, ngx_http_header_val_t *hv,
         h->hash = 1;
         h->key = hv->key;
         h->value = *value;
+    } else {
+        for (ngx_list_part_t *part = &r->headers_out.headers.part; part; part = part->next) {
+            ngx_table_elt_t *elts = part->elts;
+
+            for (ngx_uint_t i = 0; i < part->nelts; i++) {
+                if (elts[i].value.len && (hv->key.len == elts[i].key.len || hv->key.data[hv->key.len - 1] == '*') && !ngx_strncasecmp(hv->key.data, elts[i].key.data, hv->key.data[hv->key.len - 1] == '*' ? hv->key.len - 1 : hv->key.len)) {
+                    elts[i].hash = 0;
+                    elts[i].value = *value;
+                }
+            }
+        }
     }
 
     return NGX_OK;
@@ -790,6 +801,17 @@ ngx_http_add_input_header(ngx_http_request_t *r, ngx_http_header_val_t *hv,
         h->hash = 1;
         h->key = hv->key;
         h->value = *value;
+    } else {
+        for (ngx_list_part_t *part = &r->headers_in.headers.part; part; part = part->next) {
+            ngx_table_elt_t *elts = part->elts;
+
+            for (ngx_uint_t i = 0; i < part->nelts; i++) {
+                if (elts[i].value.len && (hv->key.len == elts[i].key.len || hv->key.data[hv->key.len - 1] == '*') && !ngx_strncasecmp(hv->key.data, elts[i].key.data, hv->key.data[hv->key.len - 1] == '*' ? hv->key.len - 1 : hv->key.len)) {
+                    elts[i].hash = 0;
+                    elts[i].value = *value;
+                }
+            }
+        }
     }
 
     return NGX_OK;
@@ -994,6 +1016,7 @@ ngx_http_set_response_header(ngx_http_request_t *r, ngx_http_header_val_t *hv,
     if (value->len == 0) {
         if (*old) {
             (*old)->hash = 0;
+            (*old)->value = *value;
             *old = NULL;
         } else {
             h = ngx_list_push(&r->headers_out.headers);
@@ -1268,16 +1291,8 @@ ngx_http_set_request_header(ngx_http_request_t *r, ngx_http_header_val_t *hv,
     if (value->len == 0) {
         if (*old) {
             (*old)->hash = 0;
+            (*old)->value = *value;
             *old = NULL;
-        } else {
-            h = ngx_list_push(&r->headers_in.headers);
-            if (h == NULL) {
-                return NGX_ERROR;
-            }
-
-            *old = h;
-            h->hash = 0;
-            h->value = *value;
         }
 
         return NGX_OK;
@@ -1306,7 +1321,7 @@ ngx_http_set_request_header(ngx_http_request_t *r, ngx_http_header_val_t *hv,
 static ngx_int_t ngx_http_headers_handler(ngx_http_request_t *r) {
     ngx_http_headers_conf_t *hcf = ngx_http_get_module_loc_conf(r, ngx_http_headers_filter_module);
 
-    if (hcf->input_headers) {
+    if (hcf->input_headers != NGX_CONF_UNSET_PTR) {
         ngx_http_header_val_t *h = hcf->input_headers->elts;
         for (ngx_uint_t i = 0; i < hcf->input_headers->nelts; i++) {
             ngx_str_t value;
@@ -1338,13 +1353,14 @@ ngx_http_headers_create_conf(ngx_conf_t *cf)
     /*
      * set by ngx_pcalloc():
      *
-     *     conf->headers = NULL;
-     *     conf->trailers = NULL;
      *     conf->expires_time = 0;
      *     conf->expires_value = NULL;
      */
 
     conf->expires = NGX_HTTP_EXPIRES_UNSET;
+    conf->input_headers = NGX_CONF_UNSET_PTR;
+    conf->headers = NGX_CONF_UNSET_PTR;
+    conf->trailers = NGX_CONF_UNSET_PTR;
 
     return conf;
 }
@@ -1366,17 +1382,9 @@ ngx_http_headers_merge_conf(ngx_conf_t *cf, void *parent, void *child)
         }
     }
 
-    if (conf->input_headers == NULL) {
-        conf->input_headers = prev->input_headers;
-    }
-
-    if (conf->headers == NULL) {
-        conf->headers = prev->headers;
-    }
-
-    if (conf->trailers == NULL) {
-        conf->trailers = prev->trailers;
-    }
+    ngx_conf_merge_ptr_value(conf->input_headers, prev->input_headers, NGX_CONF_UNSET_PTR);
+    ngx_conf_merge_ptr_value(conf->headers, prev->headers, NGX_CONF_UNSET_PTR);
+    ngx_conf_merge_ptr_value(conf->trailers, prev->trailers, NGX_CONF_UNSET_PTR);
 
     return NGX_CONF_OK;
 }
@@ -1495,77 +1503,85 @@ ngx_http_headers_add(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
     ngx_http_headers_conf_t *hcf = conf;
 
-    ngx_str_t                          *value;
+    ngx_str_t                          *elts;
     ngx_uint_t                          i;
     ngx_array_t                       **headers;
-    ngx_http_header_val_t              *hv;
+    ngx_http_header_val_t              *hv = NULL;
     ngx_http_set_header_t              *set;
     ngx_http_compile_complex_value_t    ccv;
 
-    value = cf->args->elts;
+    elts = cf->args->elts;
 
     headers = (ngx_array_t **) ((char *) hcf + cmd->offset);
 
-    if (*headers == NULL) {
+    if (*headers == NGX_CONF_UNSET_PTR) {
         *headers = ngx_array_create(cf->pool, 1,
                                     sizeof(ngx_http_header_val_t));
-        if (*headers == NULL) {
-            return NGX_CONF_ERROR;
-        }
+        if (*headers == NULL) { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "!ngx_array_create"); return NGX_CONF_ERROR; }
     }
 
-    hv = ngx_array_push(*headers);
-    if (hv == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    hv->key = value[1];
-    hv->handler = NULL;
-    hv->offset = 0;
-    hv->always = 0;
+    if (headers == &hcf->headers && elts[2].len != 0 && elts[1].data[elts[1].len - 1] == '*') { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "wildchar not alowed with non-empty value \"%V\"", &elts[1]); return NGX_CONF_ERROR; }
 
     if (headers == &hcf->headers) {
-        hv->handler = ngx_http_add_header;
-
         set = ngx_http_set_headers;
         for (i = 0; set[i].name.len; i++) {
-            if (ngx_strcasecmp(value[1].data, set[i].name.data) != 0) {
-                continue;
+            if ((elts[1].len == set[i].name.len || elts[1].data[elts[1].len - 1] == '*') && !ngx_strncasecmp(elts[1].data, set[i].name.data, elts[1].data[elts[1].len - 1] == '*' ? elts[1].len - 1 : elts[1].len)) {
+                if (!(hv = ngx_array_push(*headers))) { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "!ngx_array_push"); return NGX_CONF_ERROR; }
+
+                hv->key = elts[1];
+                hv->offset = set[i].offset;
+                hv->always = 0;
+                hv->handler = set[i].handler;
+
+                if (elts[2].len == 0) {
+                    ngx_memzero(&hv->value, sizeof(ngx_http_complex_value_t));
+
+                } else {
+                    ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
+                    ccv.cf = cf;
+                    ccv.value = &elts[2];
+                    ccv.complex_value = &hv->value;
+
+                    if (ngx_http_compile_complex_value(&ccv) != NGX_OK) { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "!ngx_http_compile_complex_value"); return NGX_CONF_ERROR; }
+                }
+
+                if (cf->args->nelts == 4) {
+                    if (ngx_strncasecmp(elts[3].data, (u_char *)"always", sizeof("always") - 1) != 0) { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "invalid parameter \"%V\"", &elts[3]); return NGX_CONF_ERROR; }
+                    hv->always = 1;
+                }
+
+                if (elts[1].data[elts[1].len - 1] != '*') break;
             }
-
-            hv->offset = set[i].offset;
-            hv->handler = set[i].handler;
-
-            break;
         }
     }
 
-    if (value[2].len == 0) {
-        ngx_memzero(&hv->value, sizeof(ngx_http_complex_value_t));
+    if (!hv) {
+        if (!(hv = ngx_array_push(*headers))) { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "!ngx_array_push"); return NGX_CONF_ERROR; }
 
-    } else {
-        ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+        hv->key = elts[1];
+        hv->offset = 0;
+        hv->always = 0;
+        hv->handler = headers == &hcf->headers ? ngx_http_add_header : NULL;
 
-        ccv.cf = cf;
-        ccv.value = &value[2];
-        ccv.complex_value = &hv->value;
+        if (elts[2].len == 0) {
+            ngx_memzero(&hv->value, sizeof(ngx_http_complex_value_t));
 
-        if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
-            return NGX_CONF_ERROR;
+        } else {
+            ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
+            ccv.cf = cf;
+            ccv.value = &elts[2];
+            ccv.complex_value = &hv->value;
+
+            if (ngx_http_compile_complex_value(&ccv) != NGX_OK) { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "!ngx_http_compile_complex_value"); return NGX_CONF_ERROR; }
+        }
+
+        if (cf->args->nelts == 4) {
+            if (ngx_strncasecmp(elts[3].data, (u_char *)"always", sizeof("always") - 1) != 0) { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "invalid parameter \"%V\"", &elts[3]); return NGX_CONF_ERROR; }
+            hv->always = 1;
         }
     }
-
-    if (cf->args->nelts == 3) {
-        return NGX_CONF_OK;
-    }
-
-    if (ngx_strcmp(value[3].data, "always") != 0) {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                           "invalid parameter \"%V\"", &value[3]);
-        return NGX_CONF_ERROR;
-    }
-
-    hv->always = 1;
 
     return NGX_CONF_OK;
 }
@@ -1576,61 +1592,69 @@ ngx_http_headers_add_input(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
     ngx_http_headers_conf_t *hcf = conf;
 
-    ngx_str_t                          *value;
+    ngx_str_t                          *elts;
     ngx_uint_t                          i;
     ngx_array_t                       **headers;
-    ngx_http_header_val_t              *hv;
+    ngx_http_header_val_t              *hv = NULL;
     ngx_http_set_header_t              *set;
     ngx_http_compile_complex_value_t    ccv;
 
-    value = cf->args->elts;
+    elts = cf->args->elts;
 
     headers = (ngx_array_t **) ((char *) hcf + cmd->offset);
 
-    if (*headers == NULL) {
+    if (*headers == NGX_CONF_UNSET_PTR) {
         *headers = ngx_array_create(cf->pool, 1,
                                     sizeof(ngx_http_header_val_t));
-        if (*headers == NULL) {
-            return NGX_CONF_ERROR;
-        }
+        if (*headers == NULL) { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "!ngx_array_create"); return NGX_CONF_ERROR; }
     }
 
-    hv = ngx_array_push(*headers);
-    if (hv == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    hv->key = value[1];
-    hv->handler = NULL;
-    hv->offset = 0;
-    hv->always = 0;
-
-    hv->handler = ngx_http_add_input_header;
+    if (elts[2].len != 0 && elts[1].data[elts[1].len - 1] == '*') { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "wildchar not alowed with non-empty value \"%V\"", &elts[1]); return NGX_CONF_ERROR; }
 
     set = ngx_http_set_input_headers;
     for (i = 0; set[i].name.len; i++) {
-        if (ngx_strcasecmp(value[1].data, set[i].name.data) != 0) {
-            continue;
+        if ((elts[1].len == set[i].name.len || elts[1].data[elts[1].len - 1] == '*') && !ngx_strncasecmp(elts[1].data, set[i].name.data, elts[1].data[elts[1].len - 1] == '*' ? elts[1].len - 1 : elts[1].len)) {
+            if (!(hv = ngx_array_push(*headers))) { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "!ngx_array_push"); return NGX_CONF_ERROR; }
+
+            hv->key = elts[1];
+            hv->offset = set[i].offset;
+            hv->handler = set[i].handler;
+
+            if (elts[2].len == 0) {
+                ngx_memzero(&hv->value, sizeof(ngx_http_complex_value_t));
+
+            } else {
+                ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
+                ccv.cf = cf;
+                ccv.value = &elts[2];
+                ccv.complex_value = &hv->value;
+
+                if (ngx_http_compile_complex_value(&ccv) != NGX_OK) { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "!ngx_http_compile_complex_value"); return NGX_CONF_ERROR; }
+            }
+
+            if (elts[1].data[elts[1].len - 1] != '*') break;
         }
-
-        hv->offset = set[i].offset;
-        hv->handler = set[i].handler;
-
-        break;
     }
 
-    if (value[2].len == 0) {
-        ngx_memzero(&hv->value, sizeof(ngx_http_complex_value_t));
+    if (!hv) {
+        if (!(hv = ngx_array_push(*headers))) { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "!ngx_array_push"); return NGX_CONF_ERROR; }
 
-    } else {
-        ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+        hv->key = elts[1];
+        hv->offset = 0;
+        hv->handler = ngx_http_add_input_header;
 
-        ccv.cf = cf;
-        ccv.value = &value[2];
-        ccv.complex_value = &hv->value;
+        if (elts[2].len == 0) {
+            ngx_memzero(&hv->value, sizeof(ngx_http_complex_value_t));
 
-        if (ngx_http_compile_complex_value(&ccv) != NGX_OK) {
-            return NGX_CONF_ERROR;
+        } else {
+            ngx_memzero(&ccv, sizeof(ngx_http_compile_complex_value_t));
+
+            ccv.cf = cf;
+            ccv.value = &elts[2];
+            ccv.complex_value = &hv->value;
+
+            if (ngx_http_compile_complex_value(&ccv) != NGX_OK) { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "!ngx_http_compile_complex_value"); return NGX_CONF_ERROR; }
         }
     }
 
