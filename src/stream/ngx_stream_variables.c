@@ -46,6 +46,12 @@ static ngx_int_t ngx_stream_variable_msec(ngx_stream_session_t *s,
     ngx_stream_variable_value_t *v, uintptr_t data);
 static ngx_int_t ngx_stream_variable_time_iso8601(ngx_stream_session_t *s,
     ngx_stream_variable_value_t *v, uintptr_t data);
+static ngx_int_t ngx_stream_variable_time_iso8601_msec(ngx_stream_session_t *s,
+    ngx_stream_variable_value_t *v, uintptr_t data);
+static ngx_int_t ngx_stream_variable_time_iso8601_local(ngx_stream_session_t *s,
+    ngx_stream_variable_value_t *v, uintptr_t data);
+static ngx_int_t ngx_stream_variable_time_iso8601_local_msec(ngx_stream_session_t *s,
+    ngx_stream_variable_value_t *v, uintptr_t data);
 static ngx_int_t ngx_stream_variable_time_local(ngx_stream_session_t *s,
     ngx_stream_variable_value_t *v, uintptr_t data);
 static ngx_int_t ngx_stream_variable_protocol(ngx_stream_session_t *s,
@@ -103,6 +109,15 @@ static ngx_stream_variable_t  ngx_stream_core_variables[] = {
       0, NGX_STREAM_VAR_NOCACHEABLE, 0 },
 
     { ngx_string("time_iso8601"), NULL, ngx_stream_variable_time_iso8601,
+      0, NGX_STREAM_VAR_NOCACHEABLE, 0 },
+
+    { ngx_string("time_iso8601_msec"), NULL, ngx_stream_variable_time_iso8601_msec,
+      0, NGX_STREAM_VAR_NOCACHEABLE, 0 },
+
+    { ngx_string("time_iso8601_local"), NULL, ngx_stream_variable_time_iso8601_local,
+      0, NGX_STREAM_VAR_NOCACHEABLE, 0 },
+
+    { ngx_string("time_iso8601_local_msec"), NULL, ngx_stream_variable_time_iso8601_local_msec,
       0, NGX_STREAM_VAR_NOCACHEABLE, 0 },
 
     { ngx_string("time_local"), NULL, ngx_stream_variable_time_local,
@@ -837,6 +852,96 @@ ngx_stream_variable_time_iso8601(ngx_stream_session_t *s,
                ngx_cached_http_log_iso8601.len);
 
     v->len = ngx_cached_http_log_iso8601.len;
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+    v->data = p;
+
+    return NGX_OK;
+}
+
+
+static ngx_int_t
+ngx_stream_variable_time_iso8601_msec(ngx_stream_session_t *s,
+    ngx_stream_variable_value_t *v, uintptr_t data)
+{
+    u_char  *p;
+
+    p = ngx_pnalloc(s->connection->pool, ngx_cached_http_log_iso8601.len + 4);
+    if (p == NULL) {
+        return NGX_ERROR;
+    }
+
+    ngx_memcpy(p, ngx_cached_http_log_iso8601.data,
+               ngx_cached_http_log_iso8601.len - 6);
+#if (NGX_DEBUG)
+    struct timeval tv;
+    ngx_gettimeofday(&tv);
+    ngx_snprintf(p + ngx_cached_http_log_iso8601.len - 6, 4, ".%03M", tv.tv_usec / 1000);
+#else
+    ngx_time_t *tp = ngx_timeofday();
+    ngx_snprintf(p + ngx_cached_http_log_iso8601.len - 6, 4, ".%03M", tp->msec);
+#endif
+    ngx_memcpy(p + ngx_cached_http_log_iso8601.len - 6 + 4,
+               ngx_cached_http_log_iso8601.data + ngx_cached_http_log_iso8601.len - 6, 6);
+
+    v->len = ngx_cached_http_log_iso8601.len + 4;
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+    v->data = p;
+
+    return NGX_OK;
+}
+
+
+static ngx_int_t
+ngx_stream_variable_time_iso8601_local(ngx_stream_session_t *s,
+    ngx_stream_variable_value_t *v, uintptr_t data)
+{
+    u_char  *p;
+
+    p = ngx_pnalloc(s->connection->pool, ngx_cached_http_log_iso8601.len - 6);
+    if (p == NULL) {
+        return NGX_ERROR;
+    }
+
+    ngx_memcpy(p, ngx_cached_http_log_iso8601.data,
+               ngx_cached_http_log_iso8601.len - 6);
+
+    v->len = ngx_cached_http_log_iso8601.len - 6;
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+    v->data = p;
+
+    return NGX_OK;
+}
+
+
+static ngx_int_t
+ngx_stream_variable_time_iso8601_local_msec(ngx_stream_session_t *s,
+    ngx_stream_variable_value_t *v, uintptr_t data)
+{
+    u_char  *p;
+
+    p = ngx_pnalloc(s->connection->pool, ngx_cached_http_log_iso8601.len - 6 + 4);
+    if (p == NULL) {
+        return NGX_ERROR;
+    }
+
+    ngx_memcpy(p, ngx_cached_http_log_iso8601.data,
+               ngx_cached_http_log_iso8601.len - 6);
+#if (NGX_DEBUG)
+    struct timeval tv;
+    ngx_gettimeofday(&tv);
+    ngx_snprintf(p + ngx_cached_http_log_iso8601.len - 6, 4, ".%03M", tv.tv_usec / 1000);
+#else
+    ngx_time_t *tp = ngx_timeofday();
+    ngx_snprintf(p + ngx_cached_http_log_iso8601.len - 6, 4, ".%03M", tp->msec);
+#endif
+
+    v->len = ngx_cached_http_log_iso8601.len - 6 + 4;
     v->valid = 1;
     v->no_cacheable = 0;
     v->not_found = 0;
