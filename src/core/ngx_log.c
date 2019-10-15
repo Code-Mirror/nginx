@@ -117,11 +117,14 @@ ngx_log_error_core(ngx_uint_t level, ngx_log_t *log, ngx_err_t err,
     p = ngx_cpymem(errstr, ngx_cached_err_log_time.data,
                    ngx_cached_err_log_time.len);
 
-    if (level == NGX_LOG_DEBUG) {
-        struct timeval tv;
-        ngx_gettimeofday(&tv);
-        p = ngx_snprintf(p, 7, ".%06M", tv.tv_usec);
-    }
+#if (NGX_DEBUG)
+    struct timeval tv;
+    ngx_gettimeofday(&tv);
+    p = ngx_snprintf(p, 7, ".%06M", tv.tv_usec);
+#else
+    ngx_time_t *tp = ngx_timeofday();
+    p = ngx_snprintf(p, 4, ".%03M", tp->msec);
+#endif
 
     p = ngx_slprintf(p, last, " [%V] ", &err_levels[level]);
 
