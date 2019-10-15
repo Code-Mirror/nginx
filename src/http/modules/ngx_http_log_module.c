@@ -843,7 +843,7 @@ ngx_http_log_iso8601_msec(ngx_http_request_t *r, u_char *buf, ngx_http_log_op_t 
 #if (NGX_DEBUG)
     struct timeval tv;
     ngx_gettimeofday(&tv);
-    buf = ngx_snprintf(buf, 4, ".%03M", tv.tv_usec / 1000);
+    buf = ngx_snprintf(buf, 7, ".%06M", tv.tv_usec);
 #else
     ngx_time_t *tp = ngx_timeofday();
     buf = ngx_snprintf(buf, 4, ".%03M", tp->msec);
@@ -866,7 +866,7 @@ ngx_http_log_iso8601_local_msec(ngx_http_request_t *r, u_char *buf, ngx_http_log
 #if (NGX_DEBUG)
     struct timeval tv;
     ngx_gettimeofday(&tv);
-    return ngx_snprintf(buf, 4, ".%03M", tv.tv_usec / 1000);
+    return ngx_snprintf(buf, 7, ".%06M", tv.tv_usec);
 #else
     ngx_time_t *tp = ngx_timeofday();
     return ngx_snprintf(buf, 4, ".%03M", tp->msec);

@@ -120,7 +120,7 @@ ngx_log_error_core(ngx_uint_t level, ngx_log_t *log, ngx_err_t err,
     if (level == NGX_LOG_DEBUG) {
         struct timeval tv;
         ngx_gettimeofday(&tv);
-        p = ngx_snprintf(p, 4, ".%03M", tv.tv_usec / 1000);
+        p = ngx_snprintf(p, 7, ".%06M", tv.tv_usec);
     }
 
     p = ngx_slprintf(p, last, " [%V] ", &err_levels[level]);

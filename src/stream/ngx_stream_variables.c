@@ -877,15 +877,19 @@ ngx_stream_variable_time_iso8601_msec(ngx_stream_session_t *s,
 #if (NGX_DEBUG)
     struct timeval tv;
     ngx_gettimeofday(&tv);
-    ngx_snprintf(p + ngx_cached_http_log_iso8601.len - 6, 4, ".%03M", tv.tv_usec / 1000);
+    ngx_snprintf(p + ngx_cached_http_log_iso8601.len - 6, 7, ".%06M", tv.tv_usec);
+    ngx_memcpy(p + ngx_cached_http_log_iso8601.len - 6 + 7,
+               ngx_cached_http_log_iso8601.data + ngx_cached_http_log_iso8601.len - 6, 6);
+
+    v->len = ngx_cached_http_log_iso8601.len + 7;
 #else
     ngx_time_t *tp = ngx_timeofday();
     ngx_snprintf(p + ngx_cached_http_log_iso8601.len - 6, 4, ".%03M", tp->msec);
-#endif
     ngx_memcpy(p + ngx_cached_http_log_iso8601.len - 6 + 4,
                ngx_cached_http_log_iso8601.data + ngx_cached_http_log_iso8601.len - 6, 6);
 
     v->len = ngx_cached_http_log_iso8601.len + 4;
+#endif
     v->valid = 1;
     v->no_cacheable = 0;
     v->not_found = 0;
@@ -935,13 +939,15 @@ ngx_stream_variable_time_iso8601_local_msec(ngx_stream_session_t *s,
 #if (NGX_DEBUG)
     struct timeval tv;
     ngx_gettimeofday(&tv);
-    ngx_snprintf(p + ngx_cached_http_log_iso8601.len - 6, 4, ".%03M", tv.tv_usec / 1000);
+    ngx_snprintf(p + ngx_cached_http_log_iso8601.len - 6, 7, ".%06M", tv.tv_usec);
+
+    v->len = ngx_cached_http_log_iso8601.len - 6 + 7;
 #else
     ngx_time_t *tp = ngx_timeofday();
     ngx_snprintf(p + ngx_cached_http_log_iso8601.len - 6, 4, ".%03M", tp->msec);
-#endif
 
     v->len = ngx_cached_http_log_iso8601.len - 6 + 4;
+#endif
     v->valid = 1;
     v->no_cacheable = 0;
     v->not_found = 0;
