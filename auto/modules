@@ -75,6 +75,7 @@ if [ $HTTP = YES ]; then
                          src/http/ngx_http_core_module.h \
                          src/http/ngx_http_cache.h \
                          src/http/ngx_http_variables.h \
+                         src/http/ndk_set_var.h \
                          src/http/ngx_http_script.h \
                          src/http/ngx_http_upstream.h \
                          src/http/ngx_http_upstream_round_robin.h"
@@ -86,6 +87,7 @@ if [ $HTTP = YES ]; then
                          src/http/modules/ngx_http_log_module.c \
                          src/http/ngx_http_request_body.c \
                          src/http/ngx_http_variables.c \
+                         src/http/ndk_set_var.c \
                          src/http/ngx_http_script.c \
                          src/http/ngx_http_upstream.c \
                          src/http/ngx_http_upstream_round_robin.c"
