@@ -48,7 +48,7 @@ typedef u_char *(*ngx_http_log_handler_pt)(ngx_http_request_t *r,
 #include <ngx_http_ssl_module.h>
 #endif
 #include <ngx_http_rewrite_module.h>
-
+#include <ndk_set_var.h>
 
 struct ngx_http_log_ctx_s {
     ngx_connection_t    *connection;
