@@ -53,7 +53,7 @@ static u_char            cached_http_time[NGX_TIME_SLOTS]
 static u_char            cached_http_log_time[NGX_TIME_SLOTS]
                                     [sizeof("28/Sep/1970:12:00:00 +0600")];
 static u_char            cached_http_log_iso8601[NGX_TIME_SLOTS]
-                                    [sizeof("1970-09-28T12:00:00+06:00")];
+                                    [sizeof("1970-09-28 12:00:00+06:00")];
 static u_char            cached_syslog_time[NGX_TIME_SLOTS]
                                     [sizeof("Sep 28 12:00:00")];
 
@@ -166,7 +166,7 @@ ngx_time_update(void)
 
     p3 = &cached_http_log_iso8601[slot][0];
 
-    (void) ngx_sprintf(p3, "%4d-%02d-%02dT%02d:%02d:%02d%c%02i:%02i",
+    (void) ngx_sprintf(p3, "%4d-%02d-%02d %02d:%02d:%02d%c%02i:%02i",
                        tm.ngx_tm_year, tm.ngx_tm_mon,
                        tm.ngx_tm_mday, tm.ngx_tm_hour,
                        tm.ngx_tm_min, tm.ngx_tm_sec,
