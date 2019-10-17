@@ -867,7 +867,11 @@ ngx_stream_variable_time_iso8601_msec(ngx_stream_session_t *s,
 {
     u_char  *p;
 
+#if (NGX_DEBUG)
+    p = ngx_pnalloc(s->connection->pool, ngx_cached_http_log_iso8601.len + 7);
+#else
     p = ngx_pnalloc(s->connection->pool, ngx_cached_http_log_iso8601.len + 4);
+#endif
     if (p == NULL) {
         return NGX_ERROR;
     }
@@ -929,7 +933,11 @@ ngx_stream_variable_time_iso8601_local_msec(ngx_stream_session_t *s,
 {
     u_char  *p;
 
+#if (NGX_DEBUG)
+    p = ngx_pnalloc(s->connection->pool, ngx_cached_http_log_iso8601.len - 6 + 7);
+#else
     p = ngx_pnalloc(s->connection->pool, ngx_cached_http_log_iso8601.len - 6 + 4);
+#endif
     if (p == NULL) {
         return NGX_ERROR;
     }

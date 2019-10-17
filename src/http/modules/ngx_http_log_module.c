@@ -242,12 +242,22 @@ static ngx_http_log_var_t  ngx_http_log_vars[] = {
                           ngx_http_log_time },
     { ngx_string("time_iso8601"), sizeof("1970-09-28T12:00:00+06:00") - 1,
                           ngx_http_log_iso8601 },
+#if (NGX_DEBUG)
+    { ngx_string("time_iso8601_msec"), sizeof("1970-09-28T12:00:00.000000+06:00") - 1,
+                          ngx_http_log_iso8601_msec },
+#else
     { ngx_string("time_iso8601_msec"), sizeof("1970-09-28T12:00:00.000+06:00") - 1,
                           ngx_http_log_iso8601_msec },
+#endif
     { ngx_string("time_iso8601_local"), sizeof("1970-09-28T12:00:00") - 1,
                           ngx_http_log_iso8601_local },
+#if (NGX_DEBUG)
+    { ngx_string("time_iso8601_local_msec"), sizeof("1970-09-28T12:00:00.000000") - 1,
+                          ngx_http_log_iso8601_local_msec },
+#else
     { ngx_string("time_iso8601_local_msec"), sizeof("1970-09-28T12:00:00.000") - 1,
                           ngx_http_log_iso8601_local_msec },
+#endif
     { ngx_string("msec"), NGX_TIME_T_LEN + 4, ngx_http_log_msec },
     { ngx_string("request_time"), NGX_TIME_T_LEN + 4,
                           ngx_http_log_request_time },
