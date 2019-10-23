@@ -791,6 +791,7 @@ ngx_http_add_input_header(ngx_http_request_t *r, ngx_http_header_val_t *hv,
     ngx_str_t *value)
 {
     ngx_table_elt_t  *h;
+    ngx_http_core_loc_conf_t *clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
 
     if (value->len) {
         h = ngx_list_push(&r->headers_in.headers);
@@ -801,7 +802,7 @@ ngx_http_add_input_header(ngx_http_request_t *r, ngx_http_header_val_t *hv,
         h->hash = 1;
         h->key = hv->key;
         h->value = *value;
-    } else {
+    } else if (!clcf->internal && !clcf->named) {
         for (ngx_list_part_t *part = &r->headers_in.headers.part; part; part = part->next) {
             ngx_table_elt_t *elts = part->elts;
 
@@ -1366,6 +1367,24 @@ ngx_http_headers_create_conf(ngx_conf_t *cf)
 }
 
 
+/*static void ngx_conf_merge_header_value(ngx_array_t **conf, ngx_array_t **prev, void *cmp) {
+    if (*conf == cmp || (*conf)->nelts == 0) {
+        *conf = *prev;
+    } else if (*prev != cmp && (*prev)->nelts) {
+        ngx_uint_t orig_len = (*conf)->nelts;
+        (void) ngx_array_push_n(*conf, (*prev)->nelts);
+        ngx_http_header_val_t *elts = (*conf)->elts;
+        for (ngx_uint_t i = 0; i < orig_len; i++) {
+            elts[(*conf)->nelts - 1 - i] = elts[orig_len - 1 - i];
+        }
+        ngx_http_header_val_t *prev_elts = (*prev)->elts;
+        for (ngx_uint_t i = 0; i < (*prev)->nelts; i++) {
+            elts[i] = prev_elts[i];
+        }
+    }
+}*/
+
+
 static char *
 ngx_http_headers_merge_conf(ngx_conf_t *cf, void *parent, void *child)
 {
@@ -1382,9 +1401,9 @@ ngx_http_headers_merge_conf(ngx_conf_t *cf, void *parent, void *child)
         }
     }
 
-    ngx_conf_merge_ptr_value(conf->input_headers, prev->input_headers, NGX_CONF_UNSET_PTR);
-    ngx_conf_merge_ptr_value(conf->headers, prev->headers, NGX_CONF_UNSET_PTR);
-    ngx_conf_merge_ptr_value(conf->trailers, prev->trailers, NGX_CONF_UNSET_PTR);
+    ngx_conf_merge_array_value(&conf->input_headers, &prev->input_headers, NGX_CONF_UNSET_PTR);
+    ngx_conf_merge_array_value(&conf->headers, &prev->headers, NGX_CONF_UNSET_PTR);
+    ngx_conf_merge_array_value(&conf->trailers, &prev->trailers, NGX_CONF_UNSET_PTR);
 
     return NGX_CONF_OK;
 }
