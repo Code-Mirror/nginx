@@ -290,6 +290,7 @@ char *ngx_conf_set_sec_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 char *ngx_conf_set_bufs_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 char *ngx_conf_set_enum_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 char *ngx_conf_set_bitmask_slot(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+void ngx_conf_merge_array_value(ngx_array_t **conf, ngx_array_t **prev, void *cmp);
 
 
 #endif /* _NGX_CONF_FILE_H_INCLUDED_ */
