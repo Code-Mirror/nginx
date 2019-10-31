@@ -1000,9 +1000,7 @@ ngx_http_set_content_type_header(ngx_http_request_t *r, ngx_http_header_val_t *h
         break;
     }
 
-    value->len = 0;
-
-    return ngx_http_set_response_header(r, hv, value);
+    return NGX_OK;
 }
 
 
