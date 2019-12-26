@@ -50,6 +50,7 @@ typedef struct {
     ngx_array_t               *headers;
     ngx_array_t               *trailers;
     ngx_array_t               *input_headers;
+    ngx_flag_t                 subrequest;
 } ngx_http_headers_conf_t;
 
 typedef struct {
@@ -338,6 +339,14 @@ static ngx_command_t  ngx_http_headers_filter_commands[] = {
       offsetof(ngx_http_headers_conf_t, trailers),
       NULL },
 
+    { ngx_string("add_header_subrequest"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_headers_conf_t, subrequest),
+      NULL },
+
       ngx_null_command
 };
 
@@ -385,11 +394,11 @@ ngx_http_headers_filter(ngx_http_request_t *r)
     ngx_http_header_val_t    *h;
     ngx_http_headers_conf_t  *conf;
 
-    if (r != r->main) {
+    conf = ngx_http_get_module_loc_conf(r, ngx_http_headers_filter_module);
+
+    if (!conf->subrequest && r != r->main) {
         return ngx_http_next_header_filter(r);
     }
-
-    conf = ngx_http_get_module_loc_conf(r, ngx_http_headers_filter_module);
 
     if (conf->expires == NGX_HTTP_EXPIRES_OFF
         && conf->headers == NGX_CONF_UNSET_PTR
@@ -436,7 +445,7 @@ ngx_http_headers_filter(ngx_http_request_t *r)
                 return NGX_ERROR;
             }
 
-            if (h[i].handler(r, &h[i], &value) != NGX_OK) {
+            if (h[i].handler(conf->subrequest ? r->main : r, &h[i], &value) != NGX_OK) {
                 return NGX_ERROR;
             }
         }
@@ -1360,6 +1369,7 @@ ngx_http_headers_create_conf(ngx_conf_t *cf)
     conf->input_headers = NGX_CONF_UNSET_PTR;
     conf->headers = NGX_CONF_UNSET_PTR;
     conf->trailers = NGX_CONF_UNSET_PTR;
+    conf->subrequest = NGX_CONF_UNSET;
 
     return conf;
 }
@@ -1402,6 +1412,7 @@ ngx_http_headers_merge_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_array_value(&conf->input_headers, &prev->input_headers, NGX_CONF_UNSET_PTR);
     ngx_conf_merge_array_value(&conf->headers, &prev->headers, NGX_CONF_UNSET_PTR);
     ngx_conf_merge_array_value(&conf->trailers, &prev->trailers, NGX_CONF_UNSET_PTR);
+    ngx_conf_merge_value(conf->subrequest, prev->subrequest, 0);
 
     return NGX_CONF_OK;
 }
