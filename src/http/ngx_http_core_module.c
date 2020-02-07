@@ -3604,7 +3604,7 @@ ngx_http_core_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     }
 
     ngx_conf_merge_str_value(conf->default_type,
-                              prev->default_type, "text/plain");
+                              prev->default_type, "application/octet-stream");
 
     ngx_conf_merge_off_value(conf->client_max_body_size,
                               prev->client_max_body_size, 1 * 1024 * 1024);
