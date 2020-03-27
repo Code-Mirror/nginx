@@ -22,6 +22,9 @@ typedef struct {
 
 
 static ngx_int_t ngx_http_core_find_location(ngx_http_request_t *r);
+#if (T_NGX_HTTP_IMPROVED_REWRITE)
+static ngx_int_t ngx_http_core_find_named_location(ngx_http_request_t *r);
+#endif
 static ngx_int_t ngx_http_core_find_static_location(ngx_http_request_t *r,
     ngx_http_location_tree_node_t *node);
 
@@ -1337,6 +1340,11 @@ ngx_http_core_find_location(ngx_http_request_t *r)
 
     pclcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
 
+#if (T_NGX_HTTP_IMPROVED_REWRITE)
+    if (r->uri.len && r->uri.data[0] == '@') {
+        return ngx_http_core_find_named_location(r);
+    }
+#endif
     rc = ngx_http_core_find_static_location(r, pclcf->static_locations);
 
     if (rc == NGX_AGAIN) {
@@ -1477,6 +1485,35 @@ ngx_http_core_find_static_location(ngx_http_request_t *r,
         node = node->left;
     }
 }
+
+
+#if (T_NGX_HTTP_IMPROVED_REWRITE)
+static ngx_int_t
+ngx_http_core_find_named_location(ngx_http_request_t *r)
+{
+    ngx_http_core_srv_conf_t    *cscf;
+    ngx_http_core_loc_conf_t   **clcfp;
+     cscf = ngx_http_get_module_srv_conf(r, ngx_http_core_module);
+     if (cscf->named_locations) {
+         for (clcfp = cscf->named_locations; *clcfp; clcfp++) {
+             ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                           "test location: \"%V\"", &(*clcfp)->name);
+             if (r->uri.len != (*clcfp)->name.len
+                || ngx_strncmp(r->uri.data, (*clcfp)->name.data, r->uri.len)
+                != 0)
+            {
+                continue;
+            }
+             ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                           "using location: %V \"%V?%V\"",
+                           &r->uri, &r->uri, &r->args);
+             r->loc_conf = (*clcfp)->loc_conf;
+             return NGX_OK;
+        }
+    }
+     return NGX_DECLINED;
+}
+#endif
 
 
 void *
