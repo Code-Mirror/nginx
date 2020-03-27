@@ -1417,4 +1417,5 @@ have=T_NGX_RESOLVER_FILE . auto/have
 have=T_DEPRECATED . auto/have
 have=T_NGX_HTTP_IMPROVED_IF . auto/have
 have=T_NGX_HTTP_UPSTREAM_RETRY_CC . auto/have
+have=T_NGX_HTTP_UPSTREAM_RANDOM . auto/have
 

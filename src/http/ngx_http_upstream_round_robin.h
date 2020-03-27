@@ -67,6 +67,10 @@ struct ngx_http_upstream_rr_peers_s {
     ngx_http_upstream_rr_peers_t   *zone_next;
 #endif
 
+#if (T_NGX_HTTP_UPSTREAM_RANDOM)
+    ngx_uint_t                      init_number;
+#endif
+
     ngx_uint_t                      total_weight;
 
     unsigned                        single:1;
