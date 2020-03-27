@@ -5808,6 +5808,9 @@ ngx_http_upstream(ngx_conf_t *cf, ngx_command_t *cmd, void *dummy)
                                          |NGX_HTTP_UPSTREAM_MAX_FAILS
                                          |NGX_HTTP_UPSTREAM_FAIL_TIMEOUT
                                          |NGX_HTTP_UPSTREAM_DOWN
+#if (T_NGX_HTTP_UPSTREAM_ID)
+                                         |NGX_HTTP_UPSTREAM_ID
+#endif
                                          |NGX_HTTP_UPSTREAM_BACKUP);
     if (uscf == NULL) {
         return NGX_CONF_ERROR;
@@ -5905,6 +5908,9 @@ ngx_http_upstream_server(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     time_t                       fail_timeout;
     ngx_str_t                   *value, s;
+#if (T_NGX_HTTP_UPSTREAM_ID)
+    ngx_str_t                    id;
+#endif
     ngx_url_t                    u;
     ngx_int_t                    weight, max_conns, max_fails;
     ngx_uint_t                   i;
@@ -5923,6 +5929,9 @@ ngx_http_upstream_server(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     max_conns = 0;
     max_fails = 1;
     fail_timeout = 10;
+#if (T_NGX_HTTP_UPSTREAM_ID)
+    ngx_str_null(&id);
+#endif
 
     for (i = 2; i < cf->args->nelts; i++) {
 
@@ -6011,6 +6020,20 @@ ngx_http_upstream_server(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
             continue;
         }
 
+#if (T_NGX_HTTP_UPSTREAM_ID)
+        if (ngx_strncmp(value[i].data, "id=", 3) == 0) {
+
+            if (!(uscf->flags & NGX_HTTP_UPSTREAM_ID)) {
+                goto not_supported;
+            }
+
+            id.len = value[i].len - 3;
+            id.data = &value[i].data[3];
+
+            continue;
+        }
+#endif
+
         goto invalid;
     }
 
@@ -6035,6 +6058,9 @@ ngx_http_upstream_server(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     us->max_conns = max_conns;
     us->max_fails = max_fails;
     us->fail_timeout = fail_timeout;
+#if (T_NGX_HTTP_UPSTREAM_ID)
+    us->id = id;
+#endif
 
     return NGX_CONF_OK;
 

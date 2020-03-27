@@ -110,7 +110,9 @@ typedef struct {
     time_t                           fail_timeout;
     ngx_msec_t                       slow_start;
     ngx_uint_t                       down;
-
+#if (T_NGX_HTTP_UPSTREAM_ID)
+    ngx_str_t                        id;
+#endif
     unsigned                         backup:1;
 
     NGX_COMPAT_BEGIN(6)
@@ -124,6 +126,9 @@ typedef struct {
 #define NGX_HTTP_UPSTREAM_FAIL_TIMEOUT  0x0008
 #define NGX_HTTP_UPSTREAM_DOWN          0x0010
 #define NGX_HTTP_UPSTREAM_BACKUP        0x0020
+#if (T_NGX_HTTP_UPSTREAM_ID)
+#define NGX_HTTP_UPSTREAM_ID            0x0040
+#endif
 #define NGX_HTTP_UPSTREAM_MAX_CONNS     0x0100
 
 
