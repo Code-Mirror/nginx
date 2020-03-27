@@ -1422,4 +1422,5 @@ have=T_NGX_IMPROVED_LIST . auto/have
 have=T_NGX_ACCEPT_FILTER . auto/have
 have=T_NGX_MODIFY_DEFAULT_VALUE . auto/have
 have=T_NGX_HTTP_IMPROVED_REWRITE . auto/have
+have=T_NGX_SHOW_INFO . auto/have
 
