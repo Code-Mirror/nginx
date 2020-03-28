@@ -843,6 +843,18 @@ if [ $HTTP = YES ]; then
         . auto/module
     fi
 
+    if [ $HTTP_UPSTREAM_DYNAMIC_RESOLVE = YES ]; then
+        have=T_NGX_HTTP_DYNAMIC_RESOLVE . auto/have
+        ngx_module_name=ngx_http_upstream_dynamic_module
+        ngx_module_incs=
+        ngx_module_deps=
+        ngx_module_srcs=src/http/modules/ngx_http_upstream_dynamic_module.c
+        ngx_module_libs=
+        ngx_module_link=$HTTP_UPSTREAM_DYNAMIC_RESOLVE
+
+        . auto/module
+    fi
+
     if [ $HTTP_UPSTREAM_IP_HASH = YES ]; then
         ngx_module_name=ngx_http_upstream_ip_hash_module
         ngx_module_incs=
@@ -1425,4 +1437,3 @@ have=T_NGX_HTTP_IMPROVED_REWRITE . auto/have
 have=T_NGX_SHOW_INFO . auto/have
 have=T_NGX_HTTP_IMAGE_FILTER . auto/have
 have=T_NGX_HTTP_UPSTREAM_ID . auto/have
-

@@ -113,6 +113,11 @@ typedef struct {
 #if (T_NGX_HTTP_UPSTREAM_ID)
     ngx_str_t                        id;
 #endif
+#if (T_NGX_HTTP_DYNAMIC_RESOLVE)
+    ngx_str_t                        host;
+    void                            *data;
+#endif
+
     unsigned                         backup:1;
 
     NGX_COMPAT_BEGIN(6)
@@ -150,6 +155,9 @@ struct ngx_http_upstream_srv_conf_s {
 
 #if (NGX_HTTP_UPSTREAM_ZONE)
     ngx_shm_zone_t                  *shm_zone;
+#endif
+#if (T_NGX_HTTP_DYNAMIC_RESOLVE)
+    void                            *data;
 #endif
 };
 
@@ -355,6 +363,9 @@ struct ngx_http_upstream_s {
     ngx_http_upstream_headers_in_t   headers_in;
 
     ngx_http_upstream_resolved_t    *resolved;
+#if (T_NGX_HTTP_DYNAMIC_RESOLVE)
+    ngx_resolver_ctx_t              *dyn_resolve_ctx;
+#endif
 
     ngx_buf_t                        from_client;
 
@@ -431,6 +442,15 @@ typedef struct {
 
 ngx_int_t ngx_http_upstream_create(ngx_http_request_t *r);
 void ngx_http_upstream_init(ngx_http_request_t *r);
+#if (T_NGX_HTTP_DYNAMIC_RESOLVE)
+void ngx_http_upstream_connect(ngx_http_request_t *r,
+    ngx_http_upstream_t *u);
+void ngx_http_upstream_finalize_request(ngx_http_request_t *r,
+    ngx_http_upstream_t *u, ngx_int_t rc);
+void ngx_http_upstream_next(ngx_http_request_t *r,
+    ngx_http_upstream_t *u, ngx_uint_t ft_type);
+ngx_int_t ngx_http_upstream_test_connect(ngx_connection_t *c);
+#endif
 ngx_http_upstream_srv_conf_t *ngx_http_upstream_add(ngx_conf_t *cf,
     ngx_url_t *u, ngx_uint_t flags);
 char *ngx_http_upstream_bind_set_slot(ngx_conf_t *cf, ngx_command_t *cmd,

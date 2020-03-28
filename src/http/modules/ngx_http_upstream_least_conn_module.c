@@ -240,6 +240,10 @@ ngx_http_upstream_get_least_conn_peer(ngx_peer_connection_t *pc, void *data)
     pc->sockaddr = best->sockaddr;
     pc->socklen = best->socklen;
     pc->name = &best->name;
+#if (T_NGX_HTTP_DYNAMIC_RESOLVE)
+    pc->host = &best->host;
+    pc->data2 = best->data;
+#endif
 
     best->conns++;
 

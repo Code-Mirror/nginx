@@ -103,6 +103,10 @@ ngx_http_upstream_init_round_robin(ngx_conf_t *cf,
                 peer[n].fail_timeout = server[i].fail_timeout;
                 peer[n].down = server[i].down;
                 peer[n].server = server[i].name;
+#if (T_NGX_HTTP_DYNAMIC_RESOLVE)
+                peer[n].host = server[i].host;
+                peer[n].data = server[i].data;
+#endif
 
                 *peerp = &peer[n];
                 peerp = &peer[n].next;
@@ -173,6 +177,10 @@ ngx_http_upstream_init_round_robin(ngx_conf_t *cf,
                 peer[n].fail_timeout = server[i].fail_timeout;
                 peer[n].down = server[i].down;
                 peer[n].server = server[i].name;
+#if (T_NGX_HTTP_DYNAMIC_RESOLVE)
+                peer[n].host = server[i].host;
+                peer[n].data = server[i].data;
+#endif
 
                 *peerp = &peer[n];
                 peerp = &peer[n].next;
@@ -248,6 +256,10 @@ ngx_http_upstream_init_round_robin(ngx_conf_t *cf,
         peer[i].fail_timeout = 10;
         *peerp = &peer[i];
         peerp = &peer[i].next;
+#if (T_NGX_HTTP_DYNAMIC_RESOLVE)
+        peer[i].host = u.host;
+        peer[i].data = us->data;
+#endif
     }
 
     us->peer.data = peers;
@@ -490,6 +502,10 @@ ngx_http_upstream_get_round_robin_peer(ngx_peer_connection_t *pc, void *data)
     pc->sockaddr = peer->sockaddr;
     pc->socklen = peer->socklen;
     pc->name = &peer->name;
+#if (T_NGX_HTTP_DYNAMIC_RESOLVE)
+    pc->host = &peer->host;
+    pc->data2 = peer->data;
+#endif
 
     peer->conns++;
 

@@ -99,6 +99,7 @@ HTTP_MP4=NO
 HTTP_GUNZIP=NO
 HTTP_GZIP_STATIC=NO
 HTTP_UPSTREAM_HASH=YES
+HTTP_UPSTREAM_DYNAMIC_RESOLVE=YES
 HTTP_UPSTREAM_IP_HASH=YES
 HTTP_UPSTREAM_LEAST_CONN=YES
 HTTP_UPSTREAM_RANDOM=YES
@@ -272,6 +273,7 @@ $0: warning: the \"--with-ipv6\" option is deprecated"
         --without-http_empty_gif_module) HTTP_EMPTY_GIF=NO          ;;
         --without-http_browser_module)   HTTP_BROWSER=NO            ;;
         --without-http_upstream_hash_module) HTTP_UPSTREAM_HASH=NO  ;;
+        --without-http_upstream_dynamic_resolve_module) HTTP_UPSTREAM_DYNAMIC_RESOLVE=NO  ;;
         --without-http_upstream_ip_hash_module) HTTP_UPSTREAM_IP_HASH=NO ;;
         --without-http_upstream_least_conn_module)
                                          HTTP_UPSTREAM_LEAST_CONN=NO ;;
@@ -489,6 +491,8 @@ cat << END
   --without-http_browser_module      disable ngx_http_browser_module
   --without-http_upstream_hash_module
                                      disable ngx_http_upstream_hash_module
+  --without-http_upstream_dynamic_resolve_module
+                                     disable ngx_http_upstream_dynamic_resolve_module
   --without-http_upstream_ip_hash_module
                                      disable ngx_http_upstream_ip_hash_module
   --without-http_upstream_least_conn_module
