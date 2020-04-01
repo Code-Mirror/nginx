@@ -544,11 +544,18 @@ void
 ngx_http_upstream_init(ngx_http_request_t *r)
 {
     ngx_connection_t     *c;
+    ngx_http_upstream_t  *u;
 
     c = r->connection;
 
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0,
                    "http init upstream, client timer: %d", c->read->timer_set);
+
+    u = r->upstream;
+
+    u->connect_timeout = u->conf->connect_timeout;
+    u->send_timeout = u->conf->send_timeout;
+    u->read_timeout = u->conf->read_timeout;
 
 #if (NGX_HTTP_V2)
     if (r->stream) {
@@ -1713,7 +1720,7 @@ ngx_http_upstream_connect(ngx_http_request_t *r, ngx_http_upstream_t *u)
     u->request_body_blocked = 0;
 
     if (rc == NGX_AGAIN) {
-        ngx_add_timer(c->write, u->conf->connect_timeout);
+        ngx_add_timer(c->write, u->connect_timeout);
         return;
     }
 
@@ -1791,7 +1798,7 @@ ngx_http_upstream_ssl_init_connection(ngx_http_request_t *r,
     if (rc == NGX_AGAIN) {
 
         if (!c->write->timer_set) {
-            ngx_add_timer(c->write, u->conf->connect_timeout);
+            ngx_add_timer(c->write, u->connect_timeout);
         }
 
         c->ssl->handler = ngx_http_upstream_ssl_handshake_handler;
@@ -2109,7 +2116,7 @@ ngx_http_upstream_send_request(ngx_http_request_t *r, ngx_http_upstream_t *u,
 
     if (rc == NGX_AGAIN) {
         if (!c->write->ready || u->request_body_blocked) {
-            ngx_add_timer(c->write, u->conf->send_timeout);
+            ngx_add_timer(c->write, u->send_timeout);
 
         } else if (c->write->timer_set) {
             ngx_del_timer(c->write);
@@ -2171,7 +2178,7 @@ ngx_http_upstream_send_request(ngx_http_request_t *r, ngx_http_upstream_t *u,
             return;
         }
 
-        ngx_add_timer(c->read, u->conf->read_timeout);
+        ngx_add_timer(c->read, u->read_timeout);
 
         if (c->read->ready) {
             ngx_http_upstream_process_header(r, u);
@@ -3304,7 +3311,7 @@ ngx_http_upstream_send_response(ngx_http_request_t *r, ngx_http_upstream_t *u)
         p->cyclic_temp_file = 0;
     }
 
-    p->read_timeout = u->conf->read_timeout;
+    p->read_timeout = u->read_timeout;
     p->send_timeout = clcf->send_timeout;
     p->send_lowat = clcf->send_lowat;
 
@@ -3550,7 +3557,7 @@ ngx_http_upstream_process_upgraded(ngx_http_request_t *r,
     }
 
     if (upstream->write->active && !upstream->write->ready) {
-        ngx_add_timer(upstream->write, u->conf->send_timeout);
+        ngx_add_timer(upstream->write, u->send_timeout);
 
     } else if (upstream->write->timer_set) {
         ngx_del_timer(upstream->write);
@@ -3569,7 +3576,7 @@ ngx_http_upstream_process_upgraded(ngx_http_request_t *r,
     }
 
     if (upstream->read->active && !upstream->read->ready) {
-        ngx_add_timer(upstream->read, u->conf->read_timeout);
+        ngx_add_timer(upstream->read, u->read_timeout);
 
     } else if (upstream->read->timer_set) {
         ngx_del_timer(upstream->read);
@@ -3778,7 +3785,7 @@ ngx_http_upstream_process_non_buffered_request(ngx_http_request_t *r,
     }
 
     if (upstream->read->active && !upstream->read->ready) {
-        ngx_add_timer(upstream->read, u->conf->read_timeout);
+        ngx_add_timer(upstream->read, u->read_timeout);
 
     } else if (upstream->read->timer_set) {
         ngx_del_timer(upstream->read);
