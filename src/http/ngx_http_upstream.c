@@ -1611,6 +1611,11 @@ ngx_http_upstream_connect(ngx_http_request_t *r, ngx_http_upstream_t *u)
         return;
     }
 
+    if (rc >= NGX_HTTP_SPECIAL_RESPONSE) {
+        ngx_http_upstream_finalize_request(r, u, rc);
+        return;
+    }
+
     u->state->peer = u->peer.name;
 
     if (rc == NGX_BUSY) {

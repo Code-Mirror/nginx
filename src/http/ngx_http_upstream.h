@@ -471,4 +471,9 @@ extern ngx_conf_bitmask_t  ngx_http_upstream_cache_method_mask[];
 extern ngx_conf_bitmask_t  ngx_http_upstream_ignore_headers_masks[];
 
 
+#ifndef HAVE_BALANCER_STATUS_CODE_PATCH
+#define HAVE_BALANCER_STATUS_CODE_PATCH
+#endif
+
+
 #endif /* _NGX_HTTP_UPSTREAM_H_INCLUDED_ */

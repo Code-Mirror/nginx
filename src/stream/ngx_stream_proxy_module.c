@@ -716,6 +716,11 @@ ngx_stream_proxy_connect(ngx_stream_session_t *s)
         return;
     }
 
+    if (rc >= NGX_STREAM_SPECIAL_RESPONSE) {
+        ngx_stream_proxy_finalize(s, rc);
+        return;
+    }
+
     u->state->peer = u->peer.name;
 
     if (rc == NGX_BUSY) {

@@ -27,6 +27,7 @@ typedef struct ngx_stream_session_s  ngx_stream_session_t;
 
 
 #define NGX_STREAM_OK                        200
+#define NGX_STREAM_SPECIAL_RESPONSE          300
 #define NGX_STREAM_BAD_REQUEST               400
 #define NGX_STREAM_FORBIDDEN                 403
 #define NGX_STREAM_INTERNAL_SERVER_ERROR     500
