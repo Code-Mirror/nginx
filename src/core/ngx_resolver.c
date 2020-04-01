@@ -423,14 +423,22 @@ ngx_resolver_create(ngx_conf_t *cf, ngx_str_t *names, ngx_uint_t n)
             continue;
         }
 
-#if (NGX_HAVE_INET6)
         if (ngx_strncmp(names[i].data, "ipv6=", 5) == 0) {
 
             if (ngx_strcmp(&names[i].data[5], "on") == 0) {
+#if (NGX_HAVE_INET6)
                 r->ipv6 = 1;
+#else
+                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                                   "no ipv6 support but \"%V\" in resolver",
+                                   &names[i]);
+                return NULL;
+#endif
 
             } else if (ngx_strcmp(&names[i].data[5], "off") == 0) {
+#if (NGX_HAVE_INET6)
                 r->ipv6 = 0;
+#endif
 
             } else {
                 ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
@@ -440,7 +448,6 @@ ngx_resolver_create(ngx_conf_t *cf, ngx_str_t *names, ngx_uint_t n)
 
             continue;
         }
-#endif
 
 #if !(NGX_WIN32)
         if (ngx_strncmp(names[i].data, "local=", 6) == 0) {
