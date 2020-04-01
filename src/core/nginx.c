@@ -1048,6 +1048,7 @@ ngx_core_module_create_conf(ngx_cycle_t *cycle)
 
     ccf->daemon = NGX_CONF_UNSET;
     ccf->master = NGX_CONF_UNSET;
+    ccf->privileged_agent = NGX_CONF_UNSET;
     ccf->timer_resolution = NGX_CONF_UNSET_MSEC;
     ccf->shutdown_timeout = NGX_CONF_UNSET_MSEC;
 
@@ -1077,6 +1078,7 @@ ngx_core_module_init_conf(ngx_cycle_t *cycle, void *conf)
 
     ngx_conf_init_value(ccf->daemon, 1);
     ngx_conf_init_value(ccf->master, 1);
+    ngx_conf_init_value(ccf->privileged_agent, 0);
     ngx_conf_init_msec_value(ccf->timer_resolution, 0);
     ngx_conf_init_msec_value(ccf->shutdown_timeout, 0);
 

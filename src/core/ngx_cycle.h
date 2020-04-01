@@ -25,6 +25,9 @@
 #define HAVE_INTERCEPT_ERROR_LOG_PATCH
 
 
+#define HAVE_PRIVILEGED_PROCESS_PATCH   1
+
+
 typedef struct ngx_shm_zone_s  ngx_shm_zone_t;
 
 typedef ngx_int_t (*ngx_shm_zone_init_pt) (ngx_shm_zone_t *zone, void *data);
@@ -96,6 +99,7 @@ struct ngx_cycle_s {
 typedef struct {
     ngx_flag_t                daemon;
     ngx_flag_t                master;
+    ngx_flag_t                privileged_agent;
 
     ngx_msec_t                timer_resolution;
     ngx_msec_t                shutdown_timeout;

@@ -15,6 +15,8 @@ static void ngx_start_worker_processes(ngx_cycle_t *cycle, ngx_int_t n,
     ngx_int_t type);
 static void ngx_start_cache_manager_processes(ngx_cycle_t *cycle,
     ngx_uint_t respawn);
+static void ngx_start_privileged_agent_processes(ngx_cycle_t *cycle,
+    ngx_uint_t respawn);
 static void ngx_pass_open_channel(ngx_cycle_t *cycle, ngx_channel_t *ch);
 static void ngx_signal_worker_processes(ngx_cycle_t *cycle, int signo);
 static ngx_uint_t ngx_reap_children(ngx_cycle_t *cycle);
@@ -24,6 +26,7 @@ static void ngx_worker_process_init(ngx_cycle_t *cycle, ngx_int_t worker);
 static void ngx_worker_process_exit(ngx_cycle_t *cycle);
 static void ngx_channel_handler(ngx_event_t *ev);
 static void ngx_cache_manager_process_cycle(ngx_cycle_t *cycle, void *data);
+static void ngx_privileged_agent_process_cycle(ngx_cycle_t *cycle, void *data);
 static void ngx_cache_manager_process_handler(ngx_event_t *ev);
 static void ngx_cache_loader_process_handler(ngx_event_t *ev);
 
@@ -51,6 +54,9 @@ ngx_uint_t    ngx_daemonized;
 sig_atomic_t  ngx_noaccept;
 ngx_uint_t    ngx_noaccepting;
 ngx_uint_t    ngx_restart;
+
+
+ngx_uint_t    ngx_is_privileged_agent;
 
 
 static u_char  master_process[] = "master process";
@@ -131,6 +137,7 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
     ngx_start_worker_processes(cycle, ccf->worker_processes,
                                NGX_PROCESS_RESPAWN);
     ngx_start_cache_manager_processes(cycle, 0);
+    ngx_start_privileged_agent_processes(cycle, 0);
 
     ngx_new_binary = 0;
     delay = 0;
@@ -225,6 +232,7 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
                 ngx_start_worker_processes(cycle, ccf->worker_processes,
                                            NGX_PROCESS_RESPAWN);
                 ngx_start_cache_manager_processes(cycle, 0);
+                ngx_start_privileged_agent_processes(cycle, 0);
                 ngx_noaccepting = 0;
 
                 continue;
@@ -244,6 +252,7 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
             ngx_start_worker_processes(cycle, ccf->worker_processes,
                                        NGX_PROCESS_JUST_RESPAWN);
             ngx_start_cache_manager_processes(cycle, 1);
+            ngx_start_privileged_agent_processes(cycle, 1);
 
             /* allow new processes to start */
             ngx_msleep(100);
@@ -258,6 +267,7 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
             ngx_start_worker_processes(cycle, ccf->worker_processes,
                                        NGX_PROCESS_RESPAWN);
             ngx_start_cache_manager_processes(cycle, 0);
+            ngx_start_privileged_agent_processes(cycle, 0);
             live = 1;
         }
 
@@ -414,6 +424,34 @@ ngx_start_cache_manager_processes(ngx_cycle_t *cycle, ngx_uint_t respawn)
     ngx_spawn_process(cycle, ngx_cache_manager_process_cycle,
                       &ngx_cache_loader_ctx, "cache loader process",
                       respawn ? NGX_PROCESS_JUST_SPAWN : NGX_PROCESS_NORESPAWN);
+
+    ch.command = NGX_CMD_OPEN_CHANNEL;
+    ch.pid = ngx_processes[ngx_process_slot].pid;
+    ch.slot = ngx_process_slot;
+    ch.fd = ngx_processes[ngx_process_slot].channel[0];
+
+    ngx_pass_open_channel(cycle, &ch);
+}
+
+
+static void
+ngx_start_privileged_agent_processes(ngx_cycle_t *cycle, ngx_uint_t respawn)
+{
+    ngx_channel_t          ch;
+    ngx_core_conf_t       *ccf;
+
+    ccf = (ngx_core_conf_t *) ngx_get_conf(cycle->conf_ctx,
+                                           ngx_core_module);
+
+    if (!ccf->privileged_agent) {
+        return;
+    }
+
+    ngx_spawn_process(cycle, ngx_privileged_agent_process_cycle,
+                      "privileged agent process", "privileged agent process",
+                      respawn ? NGX_PROCESS_JUST_RESPAWN : NGX_PROCESS_RESPAWN);
+
+    ngx_memzero(&ch, sizeof(ngx_channel_t));
 
     ch.command = NGX_CMD_OPEN_CHANNEL;
     ch.pid = ngx_processes[ngx_process_slot].pid;
@@ -830,7 +868,10 @@ ngx_worker_process_init(ngx_cycle_t *cycle, ngx_int_t worker)
         }
     }
 
-    if (geteuid() == 0) {
+    /*
+     * privileged agent process has the same permission as master process
+     */
+    if (!ngx_is_privileged_agent && geteuid() == 0) {
         if (setgid(ccf->group) == -1) {
             ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_errno,
                           "setgid(%d) failed", ccf->group);
@@ -1160,6 +1201,47 @@ ngx_cache_manager_process_cycle(ngx_cycle_t *cycle, void *data)
     ngx_setproctitle(ctx->name);
 
     ngx_add_timer(&ev, ctx->delay);
+
+    for ( ;; ) {
+
+        if (ngx_terminate || ngx_quit) {
+            ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "exiting");
+            ngx_worker_process_exit(cycle);
+        }
+
+        if (ngx_reopen) {
+            ngx_reopen = 0;
+            ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "reopening logs");
+            ngx_reopen_files(cycle, -1);
+        }
+
+        ngx_process_events_and_timers(cycle);
+    }
+}
+
+
+static void
+ngx_privileged_agent_process_cycle(ngx_cycle_t *cycle, void *data)
+{
+    char   *name = data;
+
+    /*
+     * Set correct process type since closing listening Unix domain socket
+     * in a master process also removes the Unix domain socket file.
+     */
+    ngx_process = NGX_PROCESS_HELPER;
+    ngx_is_privileged_agent = 1;
+
+    ngx_close_listening_sockets(cycle);
+
+    /* Set a moderate number of connections for a helper process. */
+    cycle->connection_n = 512;
+
+    ngx_worker_process_init(cycle, -1);
+
+    ngx_use_accept_mutex = 0;
+
+    ngx_setproctitle(name);
 
     for ( ;; ) {
 
